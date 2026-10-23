@@ -57,6 +57,7 @@ AsistenteIA permite que cada docente cargue la bibliografía y el material de su
 - **Historial de conversación** por estudiante y asignatura.
 - **Eliminación de historial de conversaciones (GDPR / derecho al olvido):** el estudiante puede borrar sus datos conversacionales almacenados.
 - *(should-have, no incluido en el alcance obligatorio del MVP)* Panel de analítica para docentes con preguntas frecuentes y temas de mayor dificultad.
+- *(nice-to-have, opcional)* Control de alucinaciones: umbral de similitud mínimo en el pipeline RAG; si ningún fragmento recuperado supera ese umbral, el asistente responde que no encontró información relevante en el material, en lugar de generar una respuesta sin respaldo.
 
 ### **1.3. Diseño y experiencia de usuario:**
 
@@ -119,7 +120,7 @@ flowchart TB
 - **Frontend (React 18 + TypeScript):** interfaz para docentes (gestión de asignaturas y material) y estudiantes (chat por asignatura). Se comunica con el backend vía REST usando Axios, con React Query para cacheo y estado de las peticiones.
 - **API Layer (FastAPI):** expone los endpoints REST, documentados automáticamente vía OpenAPI/Swagger. Valida entrada/salida con esquemas Pydantic. No contiene lógica de negocio.
 - **Service Layer:**
-  - `RAGService`: orquesta el pipeline RAG (chunking del material subido, generación de embeddings, recuperación de fragmentos relevantes por similitud, construcción del prompt con contexto, llamada al LLM).
+  - `RAGService`: orquesta el pipeline RAG (chunking del material subido, generación de embeddings, recuperación de fragmentos relevantes por similitud, construcción del prompt con contexto, llamada al LLM). Opcionalmente puede incorporar un umbral de similitud mínimo configurable para evitar respuestas sin respaldo documental (control de alucinaciones).
   - `SubjectService`: gestión de asignaturas y material asociado.
   - `ConversationService`: historial de conversaciones por estudiante/asignatura y borrado de historial (GDPR).
 - **Repository Layer:** abstrae el acceso a datos (SQLAlchemy sobre PostgreSQL para entidades relacionales, consultas de similitud vectorial sobre pgvector).
@@ -134,10 +135,10 @@ El proyecto está organizado como un **monorepo** con dos aplicaciones independi
 ```
 backend/
   app/
-    api/v1/endpoints/   # Routers FastAPI (subjects, chat, documents)
+    api/v1/endpoints/   # Routers FastAPI (auth, subjects, chat, documents)
     services/           # Lógica de negocio: rag_service, subject_service, conversation_service
     repositories/        # Acceso a datos (SQLAlchemy + consultas pgvector)
-    models/              # Entidades SQLAlchemy (Subject, Document, Conversation, Message)
+    models/              # Entidades SQLAlchemy (Subject, Document, DocumentChunk, Conversation, Message, MessageSource)
     schemas/             # Esquemas Pydantic (request/response)
     core/                # Configuración, variables de entorno, secretos
     main.py              # Punto de entrada de la app FastAPI
@@ -208,9 +209,11 @@ erDiagram
     USER ||--o{ SUBJECT : "imparte (como docente)"
     USER ||--o{ CONVERSATION : "inicia (como estudiante)"
     SUBJECT ||--o{ DOCUMENT : "contiene"
+    DOCUMENT ||--o{ DOCUMENT_CHUNK : "se fragmenta en"
     SUBJECT ||--o{ CONVERSATION : "se consulta en"
     CONVERSATION ||--o{ MESSAGE : "contiene"
-    DOCUMENT ||--o{ MESSAGE : "es fuente de"
+    MESSAGE ||--o{ MESSAGE_SOURCE : "cita"
+    DOCUMENT_CHUNK ||--o{ MESSAGE_SOURCE : "es citado en"
 
     USER {
         uuid id PK
@@ -233,8 +236,14 @@ erDiagram
         uuid id PK
         uuid subject_id FK
         string filename
-        text content_chunk
-        vector embedding "pgvector"
+        datetime created_at
+    }
+
+    DOCUMENT_CHUNK {
+        uuid id PK
+        uuid document_id FK
+        text content
+        vector embedding "pgvector, vector(384)"
         datetime created_at
     }
 
@@ -250,14 +259,19 @@ erDiagram
         uuid conversation_id FK
         string role "user | assistant"
         text content
-        uuid source_document_id FK "nullable"
         datetime created_at
+    }
+
+    MESSAGE_SOURCE {
+        uuid id PK
+        uuid message_id FK
+        uuid document_chunk_id FK
     }
 ```
 
 ### **3.2. Descripción de entidades principales:**
 
-- **User**: representa tanto a docentes como estudiantes.
+- **User**: representa tanto a docentes como estudiantes. Cualquier estudiante autenticado puede consultar cualquier asignatura (sin tabla de inscripción, simplificación para el MVP).
   - `id` (PK, uuid), `name` (string, not null), `email` (string, unique, not null), `password_hash` (string, not null), `role` (enum: `teacher` | `student`, not null), `created_at` (datetime).
   - Relación 1:N con `Subject` (un docente imparte varias asignaturas, vía `teacher_id`).
   - Relación 1:N con `Conversation` (un estudiante inicia varias conversaciones, vía `student_id`).
@@ -267,15 +281,23 @@ erDiagram
   - Relación 1:N con `Document` (una asignatura tiene varios documentos de material).
   - Relación 1:N con `Conversation` (una asignatura es consultada en varias conversaciones).
 
-- **Document**: fragmento de material cargado por el docente, ya procesado para RAG.
-  - `id` (PK, uuid), `subject_id` (FK → Subject.id, not null), `filename` (string, not null), `content_chunk` (text, not null — fragmento de texto extraído del documento original), `embedding` (vector, generado con HuggingFace `paraphrase-multilingual-MiniLM-L12-v2`, indexado con pgvector), `created_at` (datetime).
+- **Document**: archivo de material subido por el docente (metadatos del archivo original).
+  - `id` (PK, uuid), `subject_id` (FK → Subject.id, not null, `ON DELETE CASCADE`), `filename` (string, not null), `created_at` (datetime).
+  - Relación 1:N con `DocumentChunk` (un documento se divide en múltiples fragmentos para RAG).
+
+- **DocumentChunk**: fragmento individual de un documento, con su embedding para búsqueda por similitud.
+  - `id` (PK, uuid), `document_id` (FK → Document.id, not null, `ON DELETE CASCADE`), `content` (text, not null — fragmento de texto extraído del documento original), `embedding` (vector(384), generado con HuggingFace `paraphrase-multilingual-MiniLM-L12-v2`, indexado con `hnsw` sobre pgvector), `created_at` (datetime).
 
 - **Conversation**: sesión de consulta de un estudiante sobre una asignatura concreta.
   - `id` (PK, uuid), `student_id` (FK → User.id, not null), `subject_id` (FK → Subject.id, not null), `created_at` (datetime).
   - Relación 1:N con `Message`.
 
 - **Message**: cada turno dentro de una conversación (pregunta del estudiante o respuesta del asistente).
-  - `id` (PK, uuid), `conversation_id` (FK → Conversation.id, not null), `role` (enum: `user` | `assistant`, not null), `content` (text, not null), `source_document_id` (FK → Document.id, nullable — solo presente en mensajes del asistente, para trazabilidad de la fuente RAG), `created_at` (datetime).
+  - `id` (PK, uuid), `conversation_id` (FK → Conversation.id, not null), `role` (enum: `user` | `assistant`, not null), `content` (text, not null), `created_at` (datetime).
+  - Relación 1:N con `MessageSource` (un mensaje del asistente puede citar múltiples fragmentos como fuente).
+
+- **MessageSource**: relación entre un mensaje del asistente y los fragmentos que sirvieron de fuente para la respuesta (trazabilidad RAG).
+  - `id` (PK, uuid), `message_id` (FK → Message.id, not null, `ON DELETE CASCADE`), `document_chunk_id` (FK → DocumentChunk.id, not null).
 
 ---
 
@@ -283,7 +305,90 @@ erDiagram
 
 El backend expone una API REST (FastAPI, documentada automáticamente vía OpenAPI/Swagger). A continuación se describen los 3 endpoints principales del flujo core.
 
-### 4.1. Subir material de una asignatura
+### 4.1. Registro y acceso de usuarios
+
+Los siguientes endpoints de autenticación son necesarios para que el sistema funcione con JWT, tal como se describe en la sección 2.5 (Seguridad).
+
+```yaml
+openapi: 3.0.0
+paths:
+  /auth/register:
+    post:
+      summary: Registra un nuevo usuario (docente o estudiante)
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password, role]
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+                role:
+                  type: string
+                  enum: [teacher, student]
+      responses:
+        '201':
+          description: Usuario registrado correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  email:
+                    type: string
+                  role:
+                    type: string
+        '409':
+          description: El email ya está registrado
+
+  /auth/login:
+    post:
+      summary: Autentica un usuario y devuelve un token JWT
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+      responses:
+        '200':
+          description: Login exitoso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                  token_type:
+                    type: string
+                    example: bearer
+        '401':
+          description: Credenciales inválidas
+```
+
+### 4.2. Subir material de una asignatura
 
 ```yaml
 openapi: 3.0.0
@@ -380,14 +485,21 @@ paths:
                     format: uuid
                   answer:
                     type: string
-                  source_document:
-                    type: object
-                    properties:
-                      id:
-                        type: string
-                        format: uuid
-                      filename:
-                        type: string
+                  sources:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        chunk_id:
+                          type: string
+                          format: uuid
+                        document_id:
+                          type: string
+                          format: uuid
+                        filename:
+                          type: string
+                        fragment:
+                          type: string
 ```
 
 **Ejemplo de petición:**
@@ -403,10 +515,20 @@ paths:
 {
   "conversation_id": "9a8b7c6d-4444-5555-6666-abcdef123456",
   "answer": "Según el material de la unidad 1, RAG recupera contexto relevante en tiempo de consulta sin modificar los pesos del modelo, mientras que el fine-tuning reentrena el modelo con datos específicos...",
-  "source_document": {
-    "id": "3f1a9c2e-1234-4a5b-8c9d-abcdef123456",
-    "filename": "unidad1-introduccion.pdf"
-  }
+  "sources": [
+    {
+      "chunk_id": "a1b2c3d4-0001-0001-0001-abcdef123456",
+      "document_id": "3f1a9c2e-1234-4a5b-8c9d-abcdef123456",
+      "filename": "unidad1-introduccion.pdf",
+      "fragment": "RAG recupera contexto relevante en tiempo de consulta sin modificar los pesos del modelo..."
+    },
+    {
+      "chunk_id": "a1b2c3d4-0002-0002-0002-abcdef123456",
+      "document_id": "3f1a9c2e-1234-4a5b-8c9d-abcdef123456",
+      "filename": "unidad1-introduccion.pdf",
+      "fragment": "El fine-tuning, en cambio, reentrena el modelo con datos específicos del dominio..."
+    }
+  ]
 }
 ```
 
@@ -485,14 +607,15 @@ Escenario: Formato de archivo no soportado
 
 ```gherkin
 Escenario: Pregunta con material disponible
-  Dado que soy un estudiante autenticado e inscrito en la asignatura "Introducción a IA"
-  Y la asignatura tiene material indexado
+  Dado que soy un estudiante autenticado
+  Y la asignatura "Introducción a IA" tiene material indexado
   Cuando envío la pregunta "¿Qué diferencia hay entre RAG y fine-tuning?"
   Entonces recibo una respuesta generada a partir del material de esa asignatura
-  Y la respuesta incluye una referencia al documento de origen
+  Y la respuesta incluye referencias a los fragmentos de origen utilizados
 
 Escenario: Pregunta sin material cargado aún
-  Dado que soy un estudiante autenticado e inscrito en una asignatura sin material indexado
+  Dado que soy un estudiante autenticado
+  Y la asignatura seleccionada no tiene material indexado
   Cuando envío una pregunta
   Entonces el sistema me informa que todavía no hay material disponible para esa asignatura,
   en lugar de generar una respuesta sin fuente verificable
@@ -501,6 +624,14 @@ Escenario: Continuación de una conversación existente
   Dado que ya tengo una conversación abierta en una asignatura
   Cuando envío una nueva pregunta relacionada
   Entonces la respuesta se genera teniendo en cuenta el historial de esa conversación
+
+Escenario (opcional - control de alucinaciones): Pregunta sin fragmentos relevantes
+  Dado que soy un estudiante autenticado
+  Y la asignatura tiene material indexado
+  Pero ningún fragmento supera el umbral de similitud mínimo para la pregunta realizada
+  Cuando envío la pregunta
+  Entonces el sistema me informa que no encontró información relevante en el material disponible,
+  en lugar de generar una respuesta sin respaldo documental
 ```
 
 ---
@@ -549,17 +680,17 @@ Escenario: Eliminación de conversación inexistente
 - Crear router `chat.py` en `api/v1/endpoints/` con el endpoint `POST /chat`, validado con un schema Pydantic (`subject_id`, `conversation_id` opcional, `message`).
 - Implementar `RAGService.answer(subject_id, message, conversation_id)`:
   - Generar embedding de la pregunta (HuggingFace `paraphrase-multilingual-MiniLM-L12-v2`).
-  - Recuperar los N fragmentos más relevantes de `Document` para esa asignatura vía `DocumentRepository` (similitud coseno sobre pgvector).
+  - Recuperar los N fragmentos más relevantes de `DocumentChunk` para esa asignatura vía `DocumentChunkRepository` (similitud coseno sobre pgvector, índice hnsw).
   - Construir el prompt con el contexto recuperado (LangChain) e invocar Gemini 2.5 Flash.
-  - Persistir los mensajes (pregunta + respuesta) en `Conversation`/`Message` vía `ConversationRepository`.
+  - Persistir los mensajes (pregunta + respuesta) en `Conversation`/`Message` y las fuentes en `MessageSource` vía `ConversationRepository`.
 - Manejar el caso de asignatura sin material indexado (respuesta controlada, no error 500).
-- Proteger el endpoint con autenticación JWT (rol estudiante, inscrito en la asignatura).
-- Tests unitarios de `RAGService` con mocks del LLM y del repositorio de documentos; test de integración del endpoint con base de datos de test.
+- Proteger el endpoint con autenticación JWT (rol estudiante).
+- Tests unitarios de `RAGService` con mocks del LLM y del repositorio de chunks; test de integración del endpoint con base de datos de test.
 
 **Criterios de aceptación:**
-- Dada una asignatura con material indexado, al enviar una pregunta se recibe una respuesta con `source_document` no nulo.
+- Dada una asignatura con material indexado, al enviar una pregunta se recibe una respuesta con un array `sources` no vacío (múltiples fragmentos citados).
 - Dada una asignatura sin material, se recibe una respuesta controlada indicando que no hay contenido disponible (no un error).
-- El endpoint rechaza con 401/403 a usuarios no autenticados o no inscritos en la asignatura.
+- El endpoint rechaza con 401 a usuarios no autenticados.
 
 **Estimación:** 8 puntos (talla M/L) · **Dependencias:** Ticket 3 (esquema de `Document` con pgvector debe existir antes).
 
@@ -574,7 +705,7 @@ Escenario: Eliminación de conversación inexistente
 **Tareas técnicas:**
 - Crear página `pages/ChatPage.tsx`, accesible desde el listado de asignaturas del estudiante.
 - Componente `ChatWindow` con lista de mensajes (usuario/asistente) y input de texto.
-- Componente `MessageBubble` que renderiza el contenido y, si existe, un chip/link con el `source_document.filename` citado.
+- Componente `MessageBubble` que renderiza el contenido y, si existen, chips/links con las fuentes citadas (`sources[].filename` + fragmento).
 - Hook `useChat(subjectId)` (React Query) que llama a `POST /chat` vía `services/chatService.ts` (Axios), maneja estado de carga y error.
 - Estado de "escribiendo..." mientras se espera la respuesta del backend.
 - Manejo de error visible si el backend responde que no hay material indexado para la asignatura.
@@ -589,23 +720,26 @@ Escenario: Eliminación de conversación inexistente
 
 ---
 
-**Ticket 3 — [BASE DE DATOS] Esquema de `Document` con soporte de embeddings (pgvector)**
+**Ticket 3 — [BASE DE DATOS] Esquema de `Document`, `DocumentChunk` y `MessageSource` con soporte de embeddings (pgvector)**
 
 **Historia de usuario relacionada:** HU-1 y HU-2 (base necesaria para carga de material y para consulta RAG)
 
-**Descripción:** Crear la migración de base de datos para la tabla `documents`, incluyendo la columna de embeddings con `pgvector` y el índice necesario para búsquedas por similitud eficientes.
+**Descripción:** Crear las migraciones de base de datos para las tablas `documents` (metadatos del archivo), `document_chunks` (fragmentos con embeddings para RAG) y `message_sources` (relación entre mensajes y fragmentos citados), incluyendo el índice vectorial necesario para búsquedas por similitud eficientes.
 
 **Tareas técnicas:**
 - Habilitar la extensión `vector` en PostgreSQL (`CREATE EXTENSION IF NOT EXISTS vector;`).
-- Crear migración (Alembic) para la tabla `documents`: `id` (uuid, PK), `subject_id` (uuid, FK → `subjects.id`, not null, `ON DELETE CASCADE`), `filename` (varchar, not null), `content_chunk` (text, not null), `embedding` (`vector(384)`, dimensión del modelo `paraphrase-multilingual-MiniLM-L12-v2`), `created_at` (timestamp, default now()).
-- Crear índice `ivfflat` sobre `embedding` con operador de distancia coseno, para acelerar la búsqueda de similitud.
-- Definir el modelo SQLAlchemy `Document` y su repositorio `DocumentRepository` con el método `find_similar(subject_id, query_embedding, top_k)`.
-- Seed de datos de prueba (algunos documentos de ejemplo con embeddings precalculados) para poder probar el flujo end-to-end sin depender de la carga real.
+- Crear migración (Alembic) para la tabla `documents`: `id` (uuid, PK), `subject_id` (uuid, FK → `subjects.id`, not null, `ON DELETE CASCADE`), `filename` (varchar, not null), `created_at` (timestamp, default now()).
+- Crear migración para la tabla `document_chunks`: `id` (uuid, PK), `document_id` (uuid, FK → `documents.id`, not null, `ON DELETE CASCADE`), `content` (text, not null), `embedding` (`vector(384)`, dimensión del modelo `paraphrase-multilingual-MiniLM-L12-v2`), `created_at` (timestamp, default now()).
+- Crear migración para la tabla `message_sources`: `id` (uuid, PK), `message_id` (uuid, FK → `messages.id`, not null, `ON DELETE CASCADE`), `document_chunk_id` (uuid, FK → `document_chunks.id`, not null).
+- Crear índice `hnsw` sobre `document_chunks.embedding` con operador de distancia coseno (hnsw rinde mejor que ivfflat con pocos datos, adecuado para el MVP).
+- Definir los modelos SQLAlchemy `Document`, `DocumentChunk`, `MessageSource` y el repositorio `DocumentChunkRepository` con el método `find_similar(subject_id, query_embedding, top_k)`.
+- Seed de datos de prueba (algunos documentos con chunks y embeddings precalculados) para poder probar el flujo end-to-end sin depender de la carga real.
 
 **Criterios de aceptación:**
-- La migración se ejecuta sin errores sobre una base de datos limpia y es reversible (`downgrade`).
-- `DocumentRepository.find_similar` devuelve los documentos ordenados por similitud (menor distancia coseno primero), filtrados por `subject_id`.
-- Eliminar una asignatura elimina en cascada sus documentos asociados.
+- Las migraciones se ejecutan sin errores sobre una base de datos limpia y son reversibles (`downgrade`).
+- `DocumentChunkRepository.find_similar` devuelve los fragmentos ordenados por similitud (menor distancia coseno primero), filtrados por la asignatura del documento padre.
+- Eliminar una asignatura elimina en cascada sus documentos y fragmentos asociados.
+- Eliminar un mensaje elimina en cascada sus `MessageSource` asociados.
 
 **Estimación:** 5 puntos (talla M) · **Dependencias:** ninguna (ticket base, primero en el orden de ejecución).
 

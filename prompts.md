@@ -166,6 +166,26 @@ Generá el diagrama del modelo de datos en formato mermaid (erDiagram) con el m�
 readme.md. Tené en cuenta que la columna embedding debe soportar pgvector.
 ```
 
+**Prompt 3 (corrección post-revisión):**
+
+```
+El profesor señaló tres problemas en el modelo de datos:
+1. Document guarda un fragmento por fila repitiendo filename. Hay que separar en Document (filename,
+   subject_id) y DocumentChunk (content, embedding, document_id).
+2. Message solo puede apuntar a una fuente (source_document_id), pero una respuesta RAG se apoya en
+   varios fragmentos. Hay que crear una tabla MessageSource (message_id, document_chunk_id) para
+   permitir múltiples fuentes por respuesta.
+3. El índice ivfflat rinde mal con pocos datos; cambiar a hnsw.
+Además, las historias y tickets hablan de "estudiante inscrito en la asignatura" pero no existe esa
+relación. Decisión: simplificar para el MVP, cualquier estudiante autenticado accede a cualquier
+asignatura (sin tabla de inscripción).
+
+Aplica estos 4 cambios al diagrama ER (3.1), a la descripción de entidades (3.2), y propaga la
+coherencia a la API (sección 4), las historias (sección 5) y los tickets (sección 6): quitar
+"inscrito", cambiar source_document singular por sources array, y actualizar el ticket de BD con las
+nuevas tablas y el índice hnsw.
+```
+
 ---
 
 ### 4. Especificación de la API
@@ -178,7 +198,16 @@ del producto: subida de material por parte del docente, consulta al asistente (c
 del estudiante, y borrado de historial de conversación (GDPR).
 ```
 
-**Prompt 2:**
+**Prompt 2 (corrección post-revisión):**
+
+```
+El profesor señaló que tenemos JWT y password_hash pero ningún endpoint de registro ni login. Agregá
+POST /auth/register y POST /auth/login en formato OpenAPI a la sección 4 de la API. Además, actualizá
+el endpoint POST /chat para que devuelva un array "sources" con múltiples fragmentos citados en vez de
+un solo "source_document", coherente con el nuevo modelo de datos (DocumentChunk + MessageSource).
+```
+
+**Prompt 3:**
 
 ```
 Documenta esos 3 endpoints en formato OpenAPI (paths, requestBody, responses con sus schemas) para la
@@ -222,4 +251,19 @@ dependencias entre tickets, para la sección 6 del readme.md.
 Esta es la Entrega 1 (solo documentación, sin código). No corresponde documentar Pull Requests
 todavía. Dejá la sección 7 del readme.md con una nota indicando que se completará a partir de la
 Entrega 2, en lugar de inventar PRs ficticias.
+```
+
+---
+
+### 8. Preparación para implementación (CLAUDE.md)
+
+**Prompt 1:**
+
+```
+El profesor recomendó crear un CLAUDE.md o .cursorrules antes de programar, con las capas, la pila,
+las convenciones y el contrato de la API, para que el asistente de IA no rompa la arquitectura al
+implementar. Creá un CLAUDE.md en la raíz del repo con toda la información relevante del proyecto:
+stack, arquitectura por capas (qué puede importar qué), modelo de datos actualizado (Document +
+DocumentChunk + MessageSource), contrato de la API (auth + endpoints core), convenciones de naming,
+tipo de índice vectorial (hnsw), y reglas explícitas para el asistente.
 ```
