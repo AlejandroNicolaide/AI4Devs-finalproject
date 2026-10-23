@@ -1,4 +1,5 @@
 import uuid
+from typing import Annotated
 
 import jwt
 from fastapi import Depends, HTTPException, status
@@ -44,3 +45,7 @@ def get_current_teacher(user: User = Depends(get_current_user)) -> User:
     if user.role != "teacher":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo docentes")
     return user
+
+
+CurrentUser = Annotated[User, Depends(get_current_user)]
+CurrentTeacher = Annotated[User, Depends(get_current_teacher)]

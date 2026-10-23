@@ -4,8 +4,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import get_current_teacher
-from app.models.user import User
+from app.core.deps import CurrentTeacher
 from app.schemas.document import DocumentListItem, DocumentResponse
 from app.services.document_service import (
     DocumentService,
@@ -21,12 +20,7 @@ document_service = DocumentService()
 
 
 @router.post("", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
-async def upload_document(
-    subject_id: uuid.UUID,
-    file: UploadFile = File(...),
-    db: Session = Depends(get_db),
-    teacher: User = Depends(get_current_teacher),
-):
+async def upload_document(teacher: CurrentTeacher, subject_id: uuid.UUID, file: UploadFile = File(...), db: Session = Depends(get_db)):
     content = await file.read()
     try:
         document, chunks_created = document_service.upload_document(
@@ -50,11 +44,7 @@ async def upload_document(
 
 
 @router.get("", response_model=list[DocumentListItem])
-def list_documents(
-    subject_id: uuid.UUID,
-    db: Session = Depends(get_db),
-    teacher: User = Depends(get_current_teacher),
-):
+def list_documents(teacher: CurrentTeacher, subject_id: uuid.UUID, db: Session = Depends(get_db)):
     try:
         return document_service.list_documents(db, subject_id, teacher.id)
     except SubjectNotFoundError:

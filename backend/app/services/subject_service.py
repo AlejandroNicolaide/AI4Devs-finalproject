@@ -1,9 +1,15 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import uuid
 
 from sqlalchemy.orm import Session
 
-from app.models.subject import Subject
 from app.repositories.subject_repository import SubjectRepository
+
+if TYPE_CHECKING:
+    from app.models.subject import Subject
 
 
 class SubjectNotFoundError(Exception):

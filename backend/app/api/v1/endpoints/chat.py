@@ -2,8 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import get_current_user
-from app.models.user import User
+from app.core.deps import CurrentUser
 from app.schemas.chat import ChatRequest, ChatResponse, SourceResponse
 from app.services.conversation_service import ConversationForbiddenError, ConversationNotFoundError
 from app.services.rag_service import LLMUnavailableError, RAGService, SubjectMismatchError
@@ -15,7 +14,7 @@ rag_service = RAGService()
 
 
 @router.post("", response_model=ChatResponse)
-def chat(data: ChatRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def chat(user: CurrentUser, data: ChatRequest, db: Session = Depends(get_db)):
     try:
         result = rag_service.answer(db, user.id, data.subject_id, data.message, data.conversation_id)
     except SubjectNotFoundError:

@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import io
 import uuid
 
@@ -6,11 +10,13 @@ from PyPDF2 import PdfReader
 from sqlalchemy.orm import Session
 
 from app.core.embeddings import get_embeddings
-from app.models.document import Document
 from app.repositories.document_chunk_repository import DocumentChunkRepository
 from app.repositories.document_repository import DocumentRepository
 from app.repositories.subject_repository import SubjectRepository
 from app.services.subject_service import SubjectNotFoundError
+
+if TYPE_CHECKING:
+    from app.models.document import Document
 
 SUPPORTED_EXTENSIONS = (".pdf", ".txt")
 

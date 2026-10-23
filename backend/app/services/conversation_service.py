@@ -1,10 +1,16 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import uuid
 
 from sqlalchemy.orm import Session
 
-from app.models.conversation import Conversation
-from app.models.message import Message
 from app.repositories.conversation_repository import ConversationRepository
+
+if TYPE_CHECKING:
+    from app.models.conversation import Conversation
+    from app.models.message import Message
 
 
 class ConversationNotFoundError(Exception):

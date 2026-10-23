@@ -1,8 +1,14 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from sqlalchemy.orm import Session
 
 from app.core.security import create_access_token, hash_password, verify_password
-from app.models.user import User
 from app.repositories.user_repository import UserRepository
+
+if TYPE_CHECKING:
+    from app.models.user import User
 
 
 class EmailAlreadyRegisteredError(Exception):
