@@ -87,6 +87,7 @@ venv\Scripts\activate            # Linux/macOS: source venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env             # y edita SECRET_KEY y GEMINI_API_KEY
 alembic upgrade head             # crea las tablas, la extensión vector y el índice hnsw
+python -m app.seed               # usuarios de prueba + asignatura demo con material indexado
 uvicorn app.main:app --reload    # http://localhost:8000  (docs en /docs)
 
 # 4. Frontend (otra terminal)
@@ -100,9 +101,18 @@ npm run dev                      # http://localhost:5173
 **Notas:**
 - La primera subida de un documento descarga el modelo de embeddings de HuggingFace (~120 MB, puede tardar unos minutos); después queda en caché.
 - Sin `GEMINI_API_KEY` el resto de la aplicación funciona, pero `/chat` responde 503 en asignaturas con material.
-- No hay usuarios seed: crea un docente y un estudiante desde `/register`.
+- Los datos de demostración se cargan con `python -m app.seed` (desde `backend/`, con la base ya migrada). Es idempotente y la primera vez descarga el modelo de embeddings.
 
-**Prueba rápida:** regístrate como Docente → crea una asignatura → sube un PDF con texto → cierra sesión → regístrate como Estudiante → entra a la asignatura y pregunta sobre el contenido del PDF.
+**Credenciales de prueba** (creadas por `python -m app.seed`):
+
+| Rol | Email | Contraseña |
+|---|---|---|
+| Docente | `docente@asistenteia.com` | `Docente123!` |
+| Estudiante | `estudiante@asistenteia.com` | `Estudiante123!` |
+
+El seed también crea la asignatura «Biología celular (demo)» con un documento ya indexado (`biologia_celular.txt`), así que el estudiante puede preguntar de inmediato (por ejemplo: «¿Cuáles son las fases de la mitosis?»). También puedes crear tus propios usuarios desde `/register`. Estas credenciales son solo para desarrollo local.
+
+**Prueba rápida:** inicia sesión como estudiante → abre «Biología celular (demo)» → «Preguntar al asistente» → revisa la respuesta y sus fuentes. Para el flujo de docente: inicia sesión como docente → crea una asignatura → sube un PDF o TXT → vuelve a entrar como estudiante y pregunta sobre su contenido.
 
 ---
 
@@ -191,7 +201,7 @@ La estructura del `backend` refleja directamente las capas descritas en 2.1/2.2 
 
 ### **2.4. Infraestructura y despliegue**
 
-> Nota: a fecha de esta entrega (Entrega 1 - documentación), el proyecto aún no está desplegado. Esta sección describe el plan de infraestructura y despliegue previsto para las siguientes entregas.
+> Nota: a fecha de la Entrega 2 el proyecto se ejecuta solo en local: PostgreSQL con pgvector en Docker (`docker-compose.yml`), backend FastAPI con uvicorn y frontend con Vite (ver 1.4). Esta sección describe el plan de infraestructura y despliegue previsto para la entrega final.
 
 ```mermaid
 flowchart LR
@@ -228,7 +238,7 @@ Esta combinación se eligió por ser gestionada (sin necesidad de administrar se
 
 ### **2.6. Tests**
 
-> Nota: a fecha de esta entrega (Entrega 1 - documentación) aún no existe código; esta sección describe la estrategia de testing planificada para las siguientes entregas.
+> Nota: en la Entrega 2 el código existe pero todavía no hay suite de tests automatizados (no es obligatoria en esta entrega). El flujo principal se verificó manualmente de extremo a extremo (registro, subida de material, pregunta con fuentes, historial y borrado) y los escenarios de los specs se comprobaron contra la API. Esta sección describe la estrategia de testing planificada para la entrega final.
 
 - **Backend (Pytest):** tests unitarios sobre el Service Layer (ej. `RAGService` con mocks del LLM y del retriever), y tests de integración sobre los endpoints principales (`/subjects`, `/chat`, `/documents`) usando una base de datos de test.
 - **Frontend (Vitest + React Testing Library):** tests unitarios de componentes clave (formulario de carga de material, componente de chat).
@@ -786,7 +796,7 @@ Escenario: Eliminación de conversación inexistente
 
 > Documenta 3 de las Pull Requests realizadas durante la ejecución del proyecto
 
-Pendiente: esta es la Entrega 1 (documentación técnica, sin código todavía). Las Pull Requests se documentarán a partir de la Entrega 2, cuando exista desarrollo real sobre el repositorio.
+Pendiente: el desarrollo de la Entrega 2 se realizó sobre la rama `feature/entrega-2-AN` (historial de commits en el repositorio). Las Pull Requests reales se documentarán aquí a medida que se abran, sin incluir PRs ficticias.
 
 **Pull Request 1**
 
