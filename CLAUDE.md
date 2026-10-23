@@ -4,7 +4,7 @@
 - **Backend:** FastAPI 0.115+ (Python 3.11), SQLAlchemy + Alembic, LangChain 0.3+
 - **Frontend:** React 18 + TypeScript, Tailwind CSS + Headless UI, Axios + React Query
 - **Base de datos:** PostgreSQL 15 con extensión pgvector (Supabase)
-- **LLM:** Gemini 2.5 Flash (API externa)
+- **LLM:** Gemini vía API externa; modelo configurable con `GEMINI_MODEL` (por defecto `gemini-3.5-flash-lite`; `gemini-2.5-flash` ya no está disponible para cuentas nuevas)
 - **Embeddings:** HuggingFace `paraphrase-multilingual-MiniLM-L12-v2` (local, vector(384))
 
 ## Arquitectura (Layered Architecture + Repository Pattern)

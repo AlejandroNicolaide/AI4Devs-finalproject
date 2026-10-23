@@ -267,3 +267,42 @@ stack, arquitectura por capas (qué puede importar qué), modelo de datos actual
 DocumentChunk + MessageSource), contrato de la API (auth + endpoints core), convenciones de naming,
 tipo de índice vectorial (hnsw), y reglas explícitas para el asistente.
 ```
+
+---
+
+### 9. Implementación de la Entrega 2 (OpenSpec + Claude Code)
+
+**Herramientas y modelos:** Claude Code (extensión de VS Code) con el flujo OpenSpec (`/opsx:apply` sobre el change `implementar-entrega-2`, con proposal, specs, design y 41 tareas). Backend FastAPI + SQLAlchemy + Alembic + LangChain; frontend React 18 + Vite + Tailwind v3; LLM Gemini vía `langchain-google-genai`; embeddings HuggingFace locales. CLAUDE.md acotó las capas durante toda la implementación.
+
+**Prompt 1 (arranque de la implementación):**
+
+```
+/opsx:apply arranquemos con la implementacion
+```
+
+Resultado: el asistente leyó proposal, specs y design, y fue ejecutando las tareas en orden (entorno Docker, modelos y migraciones, auth, subjects/documents, RAG, conversaciones, frontend), marcando cada checkbox tras verificarla (curl, psql y navegador).
+
+**Prompt 2 (bloqueo con el modelo de Gemini):**
+
+```
+ya cargue en env la api key procede
+```
+
+Resultado: `/chat` devolvía 503. El asistente diagnosticó que la key era válida pero `gemini-2.5-flash` ya no está disponible para cuentas nuevas, y que `gemini-3.8-flash` daba 503/504 por saturación. Hizo el modelo configurable (`GEMINI_MODEL`) y añadió timeout y reintentos acotados.
+
+**Prompt 3 (elección del modelo alternativo):**
+
+```
+recomendame otro modelo de gemini para probar
+si probemos en ese orden
+```
+
+Resultado: se listaron los modelos disponibles para la key y se probaron en orden `gemini-3.5-flash-lite`, `gemini-3.1-flash-lite`, `gemini-3.5-flash`, `gemini-flash-lite-latest`. El primero respondió en ~1.5 s con el prompt RAG real y quedó como modelo por defecto.
+
+**Ajustes y decisiones humanas durante la implementación:**
+
+- **Puerto de PostgreSQL:** el 5432 y el 5433 estaban ocupados por contenedores de otro proyecto; se usó el 5434 (configurable con `POSTGRES_PORT`) sin tocar los otros contenedores.
+- **Modelo de LLM:** el usuario eligió probar otro modelo en lugar de mantener o fijar uno; el cambio de `gemini-2.5-flash` a `gemini-3.5-flash-lite` se documentó en el README.
+- **React 18:** la plantilla de Vite traía React 19; se fijó React 18 por CLAUDE.md. Tailwind v3 (no v4) por coherencia con `tailwind.config.js` del plan.
+- **Desviaciones menores respecto a las tareas:** se añadió `GET /subjects/{id}` (lo necesita la vista de detalle), `ConversationService` (el router no puede llamar a repositories), `ON DELETE CASCADE` en `messages` y `message_sources` (necesario para el borrado GDPR) y el driver `postgresql+psycopg2://` (SQLAlchemy 2.1 usa psycopg v3 por defecto).
+- **Verificación:** sin tests automatizados (no exigidos en la Entrega 2); el flujo completo docente → estudiante → respuesta con fuentes → historial → borrado se validó manualmente en el navegador.

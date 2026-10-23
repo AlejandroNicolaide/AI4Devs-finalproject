@@ -61,11 +61,48 @@ AsistenteIA permite que cada docente cargue la bibliografía y el material de su
 
 ### **1.3. Diseño y experiencia de usuario:**
 
-Pendiente: esta es la Entrega 1 (documentación técnica, sin código todavía). Las capturas/video de la experiencia de usuario se incorporarán a partir de la Entrega 2, cuando exista una interfaz funcional.
+La interfaz es una SPA (React + Tailwind) con dos perfiles:
+
+- **Docente:** inicia sesión, crea asignaturas desde el listado ("Crear asignatura"), entra al detalle de la suya y sube material (PDF o TXT). Al terminar la subida ve cuántos fragmentos se generaron y la lista de documentos cargados.
+- **Estudiante:** ve todas las asignaturas, entra a una y pulsa "Preguntar al asistente". En el chat escribe su pregunta (indicador "escribiendo…" mientras responde) y recibe la respuesta con un bloque **Fuentes**: chips con el nombre del documento y el fragmento citado, que se expande al pulsar. Desde **Historial** puede continuar una conversación anterior o eliminarla (con confirmación, derecho al olvido).
+
+Flujo verificado de extremo a extremo en el navegador: registro de docente → crear asignatura → subir PDF → registro de estudiante → pregunta → respuesta con fuentes → historial → eliminar conversación.
 
 ### **1.4. Instrucciones de instalación:**
 
-Pendiente: las instrucciones de instalación se documentarán a partir de la Entrega 2, cuando exista código de backend, frontend y base de datos para poner en marcha en local.
+**Requisitos:** Git, Docker Desktop, Python 3.11+ (probado con 3.13), Node.js 20+ y una API key de Gemini (gratuita, en [Google AI Studio](https://aistudio.google.com/)).
+
+```bash
+# 1. Clonar
+git clone <url-del-repositorio> && cd AI4Devs-finalproject
+
+# 2. Base de datos (PostgreSQL 15 + pgvector). Puerto del host: 5434 por defecto
+docker compose up -d
+#    Si 5434 está ocupado: POSTGRES_PORT=5435 docker compose up -d (y ajusta DATABASE_URL)
+
+# 3. Backend
+cd backend
+python -m venv venv
+venv\Scripts\activate            # Linux/macOS: source venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env             # y edita SECRET_KEY y GEMINI_API_KEY
+alembic upgrade head             # crea las tablas, la extensión vector y el índice hnsw
+uvicorn app.main:app --reload    # http://localhost:8000  (docs en /docs)
+
+# 4. Frontend (otra terminal)
+cd frontend
+npm install
+npm run dev                      # http://localhost:5173
+```
+
+**Variables de entorno (`backend/.env`):** `DATABASE_URL` (por defecto `postgresql+psycopg2://postgres:postgres@localhost:5434/asistenteia`), `SECRET_KEY`, `GEMINI_API_KEY` y `GEMINI_MODEL` (por defecto `gemini-3.5-flash-lite`; `gemini-2.5-flash` ya no está disponible para cuentas nuevas de Google AI Studio).
+
+**Notas:**
+- La primera subida de un documento descarga el modelo de embeddings de HuggingFace (~120 MB, puede tardar unos minutos); después queda en caché.
+- Sin `GEMINI_API_KEY` el resto de la aplicación funciona, pero `/chat` responde 503 en asignaturas con material.
+- No hay usuarios seed: crea un docente y un estudiante desde `/register`.
+
+**Prueba rápida:** regístrate como Docente → crea una asignatura → sube un PDF con texto → cierra sesión → regístrate como Estudiante → entra a la asignatura y pregunta sobre el contenido del PDF.
 
 ---
 
@@ -91,7 +128,7 @@ flowchart TB
     end
 
     subgraph External["Servicios externos"]
-        LLM["Gemini 2.5 Flash\n(generación de respuestas)"]
+        LLM["Gemini (3.5 Flash-Lite)\n(generación de respuestas)"]
         EMB["HuggingFace\nparaphrase-multilingual-MiniLM-L12-v2\n(embeddings, local)"]
     end
 
@@ -125,7 +162,7 @@ flowchart TB
   - `ConversationService`: historial de conversaciones por estudiante/asignatura y borrado de historial (GDPR).
 - **Repository Layer:** abstrae el acceso a datos (SQLAlchemy sobre PostgreSQL para entidades relacionales, consultas de similitud vectorial sobre pgvector).
 - **PostgreSQL 15 + pgvector:** base de datos relacional única, con la extensión pgvector para almacenar y consultar embeddings por similitud — evita mantener una base de datos vectorial separada.
-- **Gemini 2.5 Flash:** modelo de lenguaje externo, usado en la etapa de generación de la respuesta final a partir del contexto recuperado.
+- **Gemini (`gemini-3.5-flash-lite`, configurable con `GEMINI_MODEL`):** modelo de lenguaje externo, usado en la etapa de generación de la respuesta final a partir del contexto recuperado.
 - **HuggingFace `paraphrase-multilingual-MiniLM-L12-v2`:** modelo de embeddings multilingüe, ejecutado localmente (sin costo por llamada), usado tanto para indexar el material de las asignaturas como para vectorizar las preguntas de los estudiantes.
 
 ### **2.3. Descripción de alto nivel del proyecto y estructura de ficheros**
@@ -681,7 +718,7 @@ Escenario: Eliminación de conversación inexistente
 - Implementar `RAGService.answer(subject_id, message, conversation_id)`:
   - Generar embedding de la pregunta (HuggingFace `paraphrase-multilingual-MiniLM-L12-v2`).
   - Recuperar los N fragmentos más relevantes de `DocumentChunk` para esa asignatura vía `DocumentChunkRepository` (similitud coseno sobre pgvector, índice hnsw).
-  - Construir el prompt con el contexto recuperado (LangChain) e invocar Gemini 2.5 Flash.
+  - Construir el prompt con el contexto recuperado (LangChain) e invocar Gemini (modelo configurable, por defecto `gemini-3.5-flash-lite`).
   - Persistir los mensajes (pregunta + respuesta) en `Conversation`/`Message` y las fuentes en `MessageSource` vía `ConversationRepository`.
 - Manejar el caso de asignatura sin material indexado (respuesta controlada, no error 500).
 - Proteger el endpoint con autenticación JWT (rol estudiante).
