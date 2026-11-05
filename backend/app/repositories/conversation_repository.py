@@ -34,6 +34,16 @@ class ConversationRepository:
         )
         return list(db.scalars(stmt))
 
+    def get_recent_messages(self, db: Session, conversation_id: uuid.UUID, limit: int) -> list[Message]:
+        """Últimos `limit` mensajes en orden cronológico (pregunta antes que respuesta si empatan en created_at)."""
+        stmt = (
+            select(Message)
+            .where(Message.conversation_id == conversation_id)
+            .order_by(Message.created_at.desc(), Message.role.asc())
+            .limit(limit)
+        )
+        return list(reversed(list(db.scalars(stmt))))
+
     def add_message(self, db: Session, conversation_id: uuid.UUID, role: str, content: str) -> Message:
         message = Message(conversation_id=conversation_id, role=role, content=content)
         db.add(message)

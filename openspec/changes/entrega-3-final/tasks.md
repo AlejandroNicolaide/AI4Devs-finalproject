@@ -5,35 +5,35 @@
 - [x] 1.1 Añadir a `.gitignore` `*.log`, `.agents/`, `.claude/`, `entrega.md`, los `.md` de lecciones y el PDF de la devolución; verificar con `git status` que solo quedan archivos del proyecto como candidatos a commit
 - [x] 1.2 Verificar que no hay `.env` ni claves versionadas: `git ls-files | grep -i "\.env$"` vacío y `git grep -n "AIza"` sin resultados
 - [ ] 1.3 Commitear el change `entrega-3-final` (artefactos OpenSpec) en `final-project-AN` y publicar la rama; verificar con `git log origin/final-project-AN`
-- [ ] 1.4 Crear `feature/tests` desde `final-project-AN`; verificar con `git branch --show-current`
+- [x] 1.4 Crear `feature/tests` desde `final-project-AN`; verificar con `git branch --show-current`
 
 ## 2. Historial de conversación en las respuestas (HU-2)
 
-- [ ] 2.1 Añadir en `ConversationService` un método de historial reciente (últimos 6 mensajes) y usarlo desde `RAGService` antes de persistir la pregunta nueva; verificar que `/chat` sigue respondiendo con `sources` como array
-- [ ] 2.2 Incluir el historial como mensajes previos en `RAGService._build_prompt`; verificar con un test unitario que la pregunta actual no aparece duplicada y que sin `conversation_id` no hay historial
-- [ ] 2.3 Test unitario del recorte a 6 mensajes y de que solo se usa el historial de esa conversación (escenarios "Pregunta de seguimiento", "Primera pregunta sin historial" e "Historial acotado")
+- [x] 2.1 Añadir en `ConversationService` un método de historial reciente (últimos 6 mensajes) y usarlo desde `RAGService` antes de persistir la pregunta nueva; verificar que `/chat` sigue respondiendo con `sources` como array
+- [x] 2.2 Incluir el historial como mensajes previos en `RAGService._build_prompt`; verificar con un test unitario que la pregunta actual no aparece duplicada y que sin `conversation_id` no hay historial
+- [x] 2.3 Test unitario del recorte a 6 mensajes y de que solo se usa el historial de esa conversación (escenarios "Pregunta de seguimiento", "Primera pregunta sin historial" e "Historial acotado")
 
 ## 3. Infraestructura de tests backend
 
-- [ ] 3.1 Crear `backend/requirements-dev.txt` (`pytest`, `pytest-cov`, `httpx`) y `backend/pytest.ini`; verificar `pytest --collect-only` sin errores
-- [ ] 3.2 Crear la base `asistenteia_test` (documentado en el README) y `backend/tests/conftest.py` con `TEST_DATABASE_URL`, `alembic upgrade head` por sesión, sesión con rollback por test, override de `get_db` y `TestClient`; verificar con un test trivial que lee la tabla `users`
-- [ ] 3.3 Fixtures de docente, estudiante, token, asignatura y documento con vectores deterministas, y doble de `RAGService._call_llm`; verificar que ningún test llama a Gemini ni descarga el modelo salvo el marcado como lento
+- [x] 3.1 Crear `backend/requirements-dev.txt` (`pytest`, `pytest-cov`, `httpx`) y `backend/pytest.ini`; verificar `pytest --collect-only` sin errores
+- [x] 3.2 Crear la base `asistenteia_test` (documentado en el README) y `backend/tests/conftest.py` con `TEST_DATABASE_URL`, `alembic upgrade head` por sesión, sesión con rollback por test, override de `get_db` y `TestClient`; verificar con un test trivial que lee la tabla `users`
+- [x] 3.3 Fixtures de docente, estudiante, token, asignatura y documento con vectores deterministas, y doble de `RAGService._call_llm`; verificar que ningún test llama a Gemini ni descarga el modelo salvo el marcado como lento
 
 ## 4. Tests unitarios backend (trazados a los Gherkin)
 
-- [ ] 4.1 `AuthService`: registro, email duplicado, login correcto e inválido; verificar `pytest tests/unit/test_auth_service.py` en verde
-- [ ] 4.2 `RAGService`: HU-2 con material (sources array y persistencia), sin material (no llama al LLM), asignatura inexistente, `SubjectMismatchError`, rollback ante `LLMUnavailableError`; verificar en verde
-- [ ] 4.3 `DocumentService`: HU-1 extensión no soportada, documento vacío, TXT utf-8 y latin-1, PDF (fixture pequeño en `tests/fixtures/`), docente no titular (403); verificar en verde
-- [ ] 4.4 `ConversationService`: HU-3 propiedad, borrado, 404 y 403; verificar en verde
+- [x] 4.1 `AuthService`: registro, email duplicado, login correcto e inválido; verificar `pytest tests/unit/test_auth_service.py` en verde
+- [x] 4.2 `RAGService`: HU-2 con material (sources array y persistencia), sin material (no llama al LLM), asignatura inexistente, `SubjectMismatchError`, rollback ante `LLMUnavailableError`; verificar en verde
+- [x] 4.3 `DocumentService`: HU-1 extensión no soportada, documento vacío, TXT utf-8 y latin-1, PDF (fixture pequeño en `tests/fixtures/`), docente no titular (403); verificar en verde
+- [x] 4.4 `ConversationService`: HU-3 propiedad, borrado, 404 y 403; verificar en verde
 
 ## 5. Tests de integración backend
 
-- [ ] 5.1 Auth: `/auth/register` 201/409/422 y `/auth/login` 200/401; verificar en verde
-- [ ] 5.2 Subjects + documents: crear asignatura, subir TXT y PDF con `chunks_created`, 403 en asignatura ajena, 400/422 en formato no soportado
-- [ ] 5.3 Chat: 401 sin token, respuesta con `sources` como array, camino sin material, conversación existente; verificar que el historial llega al doble del LLM
-- [ ] 5.4 Conversations: listado, detalle con fuentes, `DELETE` 204 con cascada a mensajes y `message_sources`, 403 ajena, 404 inexistente
-- [ ] 5.5 Cascada a nivel BD asignatura → documentos → fragmentos (criterio del ticket 3); verificar borrando la asignatura por SQL
-- [ ] 5.6 Ejecutar `pytest --cov=app` y verificar que todo pasa; guardar el porcentaje para el README
+- [x] 5.1 Auth: `/auth/register` 201/409/422 y `/auth/login` 200/401; verificar en verde
+- [x] 5.2 Subjects + documents: crear asignatura, subir TXT y PDF con `chunks_created`, 403 en asignatura ajena, 415 en formato no soportado y 422 en documento vacío
+- [x] 5.3 Chat: 401 sin token, respuesta con `sources` como array, camino sin material, conversación existente; verificar que el historial llega al doble del LLM
+- [x] 5.4 Conversations: listado, mensajes del propietario, `DELETE` 204 con cascada a mensajes y `message_sources`, 403 ajena, 404 inexistente
+- [x] 5.5 Cascada a nivel BD asignatura → documentos → fragmentos (criterio del ticket 3); verificar borrando la asignatura por SQL
+- [x] 5.6 Ejecutar `pytest --cov=app` y verificar que todo pasa; guardar el porcentaje para el README
 
 ## 6. Operación del servicio y umbral anti-alucinaciones
 

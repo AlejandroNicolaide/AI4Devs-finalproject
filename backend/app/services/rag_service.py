@@ -1,7 +1,7 @@
 import uuid
 from dataclasses import dataclass
 
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from sqlalchemy.orm import Session
 
@@ -14,6 +14,7 @@ from app.services.conversation_service import ConversationService
 from app.services.subject_service import SubjectService
 
 TOP_K = 5
+HISTORY_MESSAGES = 6  # mensajes previos de la conversación que se envían al modelo
 
 NO_MATERIAL_ANSWER = (
     "Esta asignatura todavía no tiene material disponible, por lo que no puedo responder "
@@ -67,13 +68,22 @@ class RAGService:
         self.conversation_service = conversation_service or ConversationService()
 
     @staticmethod
-    def _build_prompt(message: str, context: list[tuple[str, str]]) -> list:
+    def _build_prompt(
+        message: str,
+        context: list[tuple[str, str]],
+        history: list[tuple[str, str]] | None = None,
+    ) -> list:
+        """`history` son pares (role, content) previos de la conversación, en orden cronológico."""
         fragments = "\n\n".join(
             f"[Fragmento {i}] (fuente: {filename})\n{content}"
             for i, (filename, content) in enumerate(context, 1)
         )
+        previous = [
+            HumanMessage(content=text) if role == "user" else AIMessage(content=text)
+            for role, text in (history or [])
+        ]
         human = f"Fragmentos del material:\n\n{fragments}\n\nPregunta del estudiante: {message}"
-        return [SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=human)]
+        return [SystemMessage(content=SYSTEM_PROMPT), *previous, HumanMessage(content=human)]
 
     @staticmethod
     def _call_llm(prompt: list) -> str:
@@ -116,6 +126,12 @@ class RAGService:
         self.subject_service.get_subject(db, subject_id)  # SubjectNotFoundError si no existe
         conversation = self._resolve_conversation(db, user_id, subject_id, conversation_id)
 
+        # el historial se lee antes de persistir la pregunta actual para no duplicarla en el prompt
+        history: list[tuple[str, str]] = []
+        if conversation_id is not None:
+            previous = self.conversation_service.get_recent_messages(db, conversation.id, HISTORY_MESSAGES)
+            history = [(m.role, m.content) for m in previous]
+
         chunks = []
         filenames: dict[uuid.UUID, str] = {}
 
@@ -131,7 +147,7 @@ class RAGService:
             # (4) prompt + (5) Gemini
             context = [(filenames[c.document_id], c.content) for c in chunks]
             try:
-                answer_text = self._call_llm(self._build_prompt(message, context))
+                answer_text = self._call_llm(self._build_prompt(message, context, history))
             except LLMUnavailableError:
                 db.rollback()  # descarta la conversación recién creada
                 raise
