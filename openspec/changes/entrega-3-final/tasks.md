@@ -44,10 +44,10 @@
 
 ## 7. Tests frontend (Vitest + RTL)
 
-- [ ] 7.1 Instalar `vitest`, `@testing-library/react`, `@testing-library/jest-dom`, `@testing-library/user-event`, `jsdom`; crear `vitest.config.ts`, `src/setupTests.ts` y el script `test`; verificar `npm run test` con un test de humo
-- [ ] 7.2 Tests de `MessageBubble` (chips de fuentes expandibles) y `ChatWindow` (envío, indicador "escribiendo…", mensaje de asignatura sin material); verificar en verde
-- [ ] 7.3 Tests de `LoginPage` (error con credenciales inválidas) y `FileUpload` (rechazo de formatos no soportados); verificar en verde
-- [ ] 7.4 Verificar `npm run lint` y `npm run build` sin errores
+- [x] 7.1 Instalar `vitest`, `@testing-library/react`, `@testing-library/jest-dom`, `@testing-library/user-event`, `jsdom`; crear `vitest.config.ts`, `src/setupTests.ts` y el script `test`; verificar `npm run test` con un test de humo
+- [x] 7.2 Tests de `MessageBubble` (chips de fuentes expandibles) y `ChatWindow` (envío, indicador "escribiendo…", mensaje de asignatura sin material); verificar en verde
+- [x] 7.3 Tests de `LoginPage` (error con credenciales inválidas) y `FileUpload` (rechazo de formatos no soportados); verificar en verde
+- [x] 7.4 Verificar `npm run lint` y `npm run build` sin errores
 
 ## 8. Test E2E con Playwright
 
