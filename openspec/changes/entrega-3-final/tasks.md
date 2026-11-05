@@ -72,9 +72,9 @@
 
 ## 11. Documentación final
 
-- [ ] 11.1 Crear `feature/docs-final` desde `final-project-AN` actualizada
+- [x] 11.1 Crear `feature/docs-final` desde `final-project-AN` actualizada
 - [ ] 11.2 README: URL pública (0.4), instalación y Docker (1.4), estructura real (2.3), infraestructura y CI reales (2.4), seguridad sin el consentimiento en el primer login y con HTTPS (2.5), tests reales y sección "Pruebas" con cobertura (2.6), numeración de la sección 4, nice-to-have del umbral (1.2) y PRs reales (7); verificar con una lectura contra el código que cada afirmación es cierta
-- [ ] 11.3 `prompts.md`: secciones de tests, despliegue y mantenimiento (máximo 3 prompts por sección), tabla "IA por fase" con las 6 fases y resumen del flujo de IA (herramientas, modelos, contexto y ajustes humanos); verificar que no quedan textos de plantilla
+- [x] 11.3 `prompts.md`: secciones de tests, despliegue y mantenimiento (máximo 3 prompts por sección), tabla "IA por fase" con las 6 fases y resumen del flujo de IA (herramientas, modelos, contexto y ajustes humanos); verificar que no quedan textos de plantilla
 - [ ] 11.4 Subir `feature/docs-final`, abrir el PR hacia `final-project-AN` y ejecutar `/code-review`; verificar el PR
 
 ## 12. Cierre e integración
