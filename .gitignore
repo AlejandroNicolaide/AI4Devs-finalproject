@@ -15,3 +15,22 @@ frontend/dist/
 .vscode/
 .idea/
 .DS_Store
+
+# Logs locales
+*.log
+
+# Herramientas de IA y material del máster (no forman parte del producto)
+.agents/
+.claude/
+entrega.md
+Ejemplo_Proyectos*.md
+Lección *
+Proyecto Final Master AI4Devs.md
+*Entrega 1*.pdf
+
+# Tests
+.pytest_cache/
+.coverage
+htmlcov/
+frontend/test-results/
+frontend/playwright-report/
