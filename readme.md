@@ -103,7 +103,7 @@ Variables opcionales:
 - `SIMILARITY_THRESHOLD`: similitud coseno mínima (0-1) para citar un fragmento. Vacío (por defecto) = sin filtro. Si ningún fragmento lo supera, el asistente responde que no encontró información relevante en el material y no llama a Gemini. Calibrado con el material de demostración y el modelo de embeddings real: las preguntas relevantes obtienen entre 0,19 y 0,81 y las ajenas al temario no pasan de 0,10, por lo que **0,15** es un valor conservador. Con más material y fragmentos más pequeños conviene recalibrarlo.
 
 **Notas:**
-- La primera subida de un documento descarga el modelo de embeddings de HuggingFace (~120 MB, puede tardar unos minutos); después queda en caché.
+- La primera subida de un documento descarga el modelo de embeddings de HuggingFace (~460 MB, puede tardar unos minutos); después queda en caché.
 - Sin `GEMINI_API_KEY` el resto de la aplicación funciona, pero `/chat` responde 503 en asignaturas con material.
 - Los datos de demostración se cargan con `python -m app.seed` (desde `backend/`, con la base ya migrada). Es idempotente y la primera vez descarga el modelo de embeddings.
 

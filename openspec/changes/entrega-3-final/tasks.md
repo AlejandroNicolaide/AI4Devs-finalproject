@@ -62,10 +62,10 @@
 
 ## 10. Despliegue en Dokploy
 
-- [ ] 10.1 Crear `feature/deploy` desde `final-project-AN`; fijar versiones en `requirements.txt` y verificar con `pip install -r requirements.txt` en un venv limpio y `pytest` en verde
-- [ ] 10.2 `backend/Dockerfile` y entrypoint (migraciones → seed → uvicorn) con precarga del modelo de embeddings; verificar `docker build` y que `/health` responde en el contenedor
+- [x] 10.1 Crear `feature/deploy` desde `final-project-AN`; fijar versiones en `requirements.txt` y verificar con `pip install -r requirements.txt` en un venv limpio y `pytest` en verde
+- [x] 10.2 `backend/Dockerfile` y entrypoint (migraciones → seed → uvicorn) con precarga del modelo de embeddings; verificar `docker build` y que `/health` responde en el contenedor
 - [x] 10.3 `frontend/Dockerfile` (multistage, `VITE_API_URL` como build-arg) y `frontend/nginx.conf` con fallback SPA; verificar `docker build` y que la SPA carga y navega por URL directa
-- [ ] 10.4 `docker-compose.prod.yml` (`pgvector/pgvector:pg15`, backend, frontend, volumen, healthchecks); verificar `docker compose -f docker-compose.prod.yml up --build` en local con login y pregunta con fuentes
+- [x] 10.4 `docker-compose.prod.yml` (`pgvector/pgvector:pg15`, backend, frontend, volumen, healthchecks); verificar `docker compose -f docker-compose.prod.yml up --build` en local con login y pregunta con fuentes
 - [ ] 10.5 Redactar la guía de Dokploy en el README: variables exactas (`DATABASE_URL`, `SECRET_KEY`, `GEMINI_API_KEY`, `GEMINI_MODEL`, `CORS_ORIGINS`, `VITE_API_URL`, `POSTGRES_*`), dominios `app.` y `api.` con HTTPS, requisito de RAM y uso de `scripts/init_db.sql`; verificar que cada variable existe en `config.py` o en los compose
 - [ ] 10.6 Subir `feature/deploy`, abrir el PR hacia `final-project-AN` y ejecutar `/code-review`; verificar el PR
 - [ ] 10.7 (Lo ejecuta el usuario en su VPS) Desplegar en Dokploy y comprobar `https://api.<dominio>/health` y el flujo con credenciales del seed; registrar la URL pública

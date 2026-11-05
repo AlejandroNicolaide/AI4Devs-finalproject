@@ -12,7 +12,7 @@ RUN pip install torch --index-url https://download.pytorch.org/whl/cpu
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
-# El modelo de embeddings se descarga al construir la imagen: la primera subida de material no espera ~120 MB
+# El modelo de embeddings se descarga al construir la imagen: la primera subida de material no espera ~460 MB
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')"
 
 COPY alembic.ini ./
