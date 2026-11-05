@@ -105,3 +105,29 @@ def test_gemini_unavailable_returns_503_and_leaves_no_conversation(client, stude
 
     assert response.status_code == 503
     assert client.get("/conversations", headers=student.headers).json() == []
+
+
+def test_threshold_rejects_an_unrelated_question_without_calling_the_model(
+    client, student, subject, material, llm_calls, monkeypatch
+):
+    """Escenario (opcional): Pregunta sin fragmentos relevantes."""
+    monkeypatch.setattr("app.services.rag_service.settings.SIMILARITY_THRESHOLD", 0.5)
+
+    response = ask(client, student, subject, "campeonato internacional de ajedrez")
+
+    body = response.json()
+    assert response.status_code == 200
+    assert "No encontré información relevante" in body["answer"]
+    assert body["sources"] == []
+    assert llm_calls == []
+
+
+def test_threshold_keeps_a_related_question(client, student, subject, material, llm_calls, monkeypatch):
+    monkeypatch.setattr("app.services.rag_service.settings.SIMILARITY_THRESHOLD", 0.2)
+
+    body = ask(client, student, subject, "fases de la mitosis profase metafase anafase telofase").json()
+
+    assert body["answer"] == "Respuesta simulada del asistente."
+    assert len(body["sources"]) >= 1
+    assert "mitosis" in body["sources"][0]["fragment"].lower()
+    assert len(llm_calls) == 1

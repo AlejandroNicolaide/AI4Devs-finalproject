@@ -98,6 +98,10 @@ npm run dev                      # http://localhost:5173
 
 **Variables de entorno (`backend/.env`):** `DATABASE_URL` (por defecto `postgresql+psycopg2://postgres:postgres@localhost:5434/asistenteia`), `SECRET_KEY`, `GEMINI_API_KEY` y `GEMINI_MODEL` (por defecto `gemini-3.5-flash-lite`; `gemini-2.5-flash` ya no está disponible para cuentas nuevas de Google AI Studio).
 
+Variables opcionales:
+- `CORS_ORIGINS`: orígenes permitidos por CORS, separados por comas (por defecto, los dos orígenes del frontend local; en producción, la URL pública del frontend). Un `*` se ignora porque la API usa credenciales.
+- `SIMILARITY_THRESHOLD`: similitud coseno mínima (0-1) para citar un fragmento. Vacío (por defecto) = sin filtro. Si ningún fragmento lo supera, el asistente responde que no encontró información relevante en el material y no llama a Gemini. Calibrado con el material de demostración y el modelo de embeddings real: las preguntas relevantes obtienen entre 0,19 y 0,81 y las ajenas al temario no pasan de 0,10, por lo que **0,15** es un valor conservador. Con más material y fragmentos más pequeños conviene recalibrarlo.
+
 **Notas:**
 - La primera subida de un documento descarga el modelo de embeddings de HuggingFace (~120 MB, puede tardar unos minutos); después queda en caché.
 - Sin `GEMINI_API_KEY` el resto de la aplicación funciona, pero `/chat` responde 503 en asignaturas con material.

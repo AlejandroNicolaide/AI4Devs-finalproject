@@ -15,6 +15,7 @@ from app.services.conversation_service import ConversationForbiddenError
 from app.services.rag_service import (
     HISTORY_MESSAGES,
     NO_MATERIAL_ANSWER,
+    NO_RELEVANT_ANSWER,
     LLMUnavailableError,
     RAGService,
     SubjectMismatchError,
@@ -43,7 +44,7 @@ def deps(monkeypatch):
 
     chunk_repository = MagicMock()
     chunk_repository.count_by_subject_id.return_value = len(chunks)
-    chunk_repository.find_similar.return_value = chunks
+    chunk_repository.find_similar.return_value = [(chunks[0], 0.10), (chunks[1], 0.30)]
 
     document_repository = MagicMock()
     document_repository.get_by_ids.return_value = [document]
@@ -102,7 +103,7 @@ def test_answer_with_material_returns_sources_array_and_persists(deps, llm):
 
 
 def test_answer_single_chunk_still_returns_array(deps, llm):
-    deps.chunk_repository.find_similar.return_value = deps.chunks[:1]
+    deps.chunk_repository.find_similar.return_value = [(deps.chunks[0], 0.10)]
 
     result = deps.service.answer(deps.db, USER_ID, SUBJECT_ID, "mitosis")
 
@@ -213,3 +214,48 @@ def test_build_prompt_keeps_history_order():
 
     assert [m.content for m in prompt[1:-1]] == ["uno", "dos", "tres"]
     assert isinstance(prompt[2], AIMessage)
+
+
+# --- Umbral de similitud mínimo (HU-2: control de alucinaciones, opcional) ---
+
+
+def test_without_threshold_all_retrieved_chunks_are_used(deps, llm, monkeypatch):
+    """Escenario: Umbral no configurado."""
+    monkeypatch.setattr(rag_module.settings, "SIMILARITY_THRESHOLD", None)
+
+    result = deps.service.answer(deps.db, USER_ID, SUBJECT_ID, "mitosis")
+
+    assert len(result.sources) == 2
+
+
+def test_chunks_below_the_threshold_are_dropped(deps, llm, monkeypatch):
+    """Escenario: Algún fragmento supera el umbral (similitudes 0.90 y 0.70, umbral 0.8)."""
+    monkeypatch.setattr(rag_module.settings, "SIMILARITY_THRESHOLD", 0.8)
+
+    result = deps.service.answer(deps.db, USER_ID, SUBJECT_ID, "mitosis")
+
+    assert [s.fragment for s in result.sources] == ["La mitosis tiene cuatro fases."]
+    assert "Profase y metafase." not in llm[0][-1].content
+
+
+def test_no_chunk_above_the_threshold_gives_controlled_answer_without_llm(deps, llm, monkeypatch):
+    """Escenario: Ningún fragmento supera el umbral."""
+    monkeypatch.setattr(rag_module.settings, "SIMILARITY_THRESHOLD", 0.95)
+
+    result = deps.service.answer(deps.db, USER_ID, SUBJECT_ID, "¿Quién ganó el mundial?")
+
+    assert result.answer == NO_RELEVANT_ANSWER
+    assert result.sources == []
+    assert llm == []
+    # la pregunta y la respuesta controlada se guardan igualmente en el historial
+    roles = [c.args[2] for c in deps.conversation_repository.add_message.call_args_list]
+    assert roles == ["user", "assistant"]
+
+
+def test_threshold_boundary_is_inclusive(deps, llm, monkeypatch):
+    monkeypatch.setattr(rag_module.settings, "SIMILARITY_THRESHOLD", 0.9)
+    deps.chunk_repository.find_similar.return_value = [(deps.chunks[0], 0.1)]
+
+    result = deps.service.answer(deps.db, USER_ID, SUBJECT_ID, "mitosis")
+
+    assert len(result.sources) == 1

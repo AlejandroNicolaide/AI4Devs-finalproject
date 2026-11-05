@@ -24,13 +24,14 @@ class DocumentChunkRepository:
 
     def find_similar(
         self, db: Session, subject_id: uuid.UUID, query_embedding: list[float], top_k: int
-    ) -> list[DocumentChunk]:
-        """Top-k chunks de la asignatura por distancia coseno (operador <=>)."""
+    ) -> list[tuple[DocumentChunk, float]]:
+        """Top-k (chunk, distancia coseno) de la asignatura, del más cercano al más lejano (operador <=>)."""
+        distance = DocumentChunk.embedding.cosine_distance(query_embedding)
         stmt = (
-            select(DocumentChunk)
+            select(DocumentChunk, distance.label("distance"))
             .join(Document, Document.id == DocumentChunk.document_id)
             .where(Document.subject_id == subject_id)
-            .order_by(DocumentChunk.embedding.cosine_distance(query_embedding))
+            .order_by(distance)
             .limit(top_k)
         )
-        return list(db.scalars(stmt))
+        return [(row[0], float(row[1])) for row in db.execute(stmt)]

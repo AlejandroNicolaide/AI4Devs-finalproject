@@ -37,10 +37,10 @@
 
 ## 6. Operación del servicio y umbral anti-alucinaciones
 
-- [ ] 6.1 Añadir `CORS_ORIGINS` y `SIMILARITY_THRESHOLD` a `Settings` y a `.env.example`; usar `CORS_ORIGINS` en `main.py`; verificar con tests de los escenarios "Origen permitido", "Origen no permitido" y "Sin configuración"
-- [ ] 6.2 Añadir `GET /health`; verificar con un test que responde 200 `{"status": "ok"}` sin token
-- [ ] 6.3 `DocumentChunkRepository.find_similar` devuelve `(chunk, distancia)` y `RAGService` aplica el umbral con respuesta controlada sin llamar al LLM; verificar con tests de los tres escenarios del umbral
-- [ ] 6.4 Calibrar `SIMILARITY_THRESHOLD` con el material del seed (pregunta relevante vs. ajena) y registrar el valor recomendado en el README
+- [x] 6.1 Añadir `CORS_ORIGINS` y `SIMILARITY_THRESHOLD` a `Settings` y a `.env.example`; usar `CORS_ORIGINS` en `main.py`; verificar con tests de los escenarios "Origen permitido", "Origen no permitido" y "Sin configuración"
+- [x] 6.2 Añadir `GET /health`; verificar con un test que responde 200 `{"status": "ok"}` sin token
+- [x] 6.3 `DocumentChunkRepository.find_similar` devuelve `(chunk, distancia)` y `RAGService` aplica el umbral con respuesta controlada sin llamar al LLM; verificar con tests de los tres escenarios del umbral
+- [x] 6.4 Calibrar `SIMILARITY_THRESHOLD` con el material del seed (pregunta relevante vs. ajena) y registrar el valor recomendado en el README
 
 ## 7. Tests frontend (Vitest + RTL)
 

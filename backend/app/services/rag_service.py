@@ -21,6 +21,11 @@ NO_MATERIAL_ANSWER = (
     "tu pregunta. Consulta de nuevo cuando el docente haya subido contenido."
 )
 
+NO_RELEVANT_ANSWER = (
+    "No encontré información relevante sobre tu pregunta en el material de esta asignatura. "
+    "Prueba a reformularla o consulta directamente con el docente."
+)
+
 SYSTEM_PROMPT = (
     "Eres un asistente académico. Responde a la pregunta del estudiante usando EXCLUSIVAMENTE "
     "los fragmentos de material de la asignatura que se te proporcionan. Si los fragmentos no "
@@ -141,16 +146,24 @@ class RAGService:
         else:
             # (2) embedding de la pregunta, (3) búsqueda top-k por coseno
             query_embedding = get_embeddings().embed_query(message)
-            chunks = self.chunk_repository.find_similar(db, subject_id, query_embedding, TOP_K)
-            documents = self.document_repository.get_by_ids(db, list({c.document_id for c in chunks}))
-            filenames = {d.id: d.filename for d in documents}
-            # (4) prompt + (5) Gemini
-            context = [(filenames[c.document_id], c.content) for c in chunks]
-            try:
-                answer_text = self._call_llm(self._build_prompt(message, context, history))
-            except LLMUnavailableError:
-                db.rollback()  # descarta la conversación recién creada
-                raise
+            scored = self.chunk_repository.find_similar(db, subject_id, query_embedding, TOP_K)
+            threshold = settings.SIMILARITY_THRESHOLD
+            if threshold is not None:  # similitud coseno = 1 - distancia
+                scored = [(c, d) for c, d in scored if 1 - d >= threshold]
+            chunks = [c for c, _ in scored]
+            if not chunks:
+                # (3b) ningún fragmento relevante -> respuesta controlada, sin llamar al LLM
+                answer_text = NO_RELEVANT_ANSWER
+            else:
+                documents = self.document_repository.get_by_ids(db, list({c.document_id for c in chunks}))
+                filenames = {d.id: d.filename for d in documents}
+                # (4) prompt + (5) Gemini
+                context = [(filenames[c.document_id], c.content) for c in chunks]
+                try:
+                    answer_text = self._call_llm(self._build_prompt(message, context, history))
+                except LLMUnavailableError:
+                    db.rollback()  # descarta la conversación recién creada
+                    raise
 
         # (6) persistencia de mensajes y fuentes
         self.conversation_repository.add_message(db, conversation.id, "user", message)

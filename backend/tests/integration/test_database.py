@@ -33,9 +33,12 @@ def test_find_similar_orders_by_cosine_distance_within_the_subject(
     query = fake_embeddings.embed_query("fases profase metafase anafase telofase de la mitosis")
     found = DocumentChunkRepository().find_similar(db_session, uuid.UUID(subject["id"]), query, 5)
 
-    assert "profase" in found[0].content
+    chunks = [c for c, _ in found]
+    distances = [d for _, d in found]
+    assert "profase" in chunks[0].content
+    assert distances == sorted(distances) and 0 <= distances[0] < distances[-1] <= 1
     # nunca devuelve fragmentos de otra asignatura
-    assert all("ajeno" not in c.content for c in found)
+    assert all("ajeno" not in c.content for c in chunks)
     assert len(found) == material["chunks_created"]
 
 
