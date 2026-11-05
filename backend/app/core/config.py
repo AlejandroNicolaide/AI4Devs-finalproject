@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = DEFAULT_CORS_ORIGINS
     # Similitud coseno mínima (0-1) para usar un fragmento; None desactiva el filtro
     SIMILARITY_THRESHOLD: float | None = None
+    # Solo para pruebas E2E: sustituye a Gemini por una respuesta fija. No definir en producción.
+    LLM_FAKE: bool = False
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

@@ -242,12 +242,35 @@ Esta combinación se eligió por ser gestionada (sin necesidad de administrar se
 
 ### **2.6. Tests**
 
-> Nota: en la Entrega 2 el código existe pero todavía no hay suite de tests automatizados (no es obligatoria en esta entrega). El flujo principal se verificó manualmente de extremo a extremo (registro, subida de material, pregunta con fuentes, historial y borrado) y los escenarios de los specs se comprobaron contra la API. Esta sección describe la estrategia de testing planificada para la entrega final.
+La suite cubre los tres niveles pedidos y se traza a los escenarios Gherkin de las historias de usuario (sección 5). Ningún test llama a Gemini: en backend se sustituye la llamada al modelo y los embeddings por dobles deterministas; en el E2E se usa `LLM_FAKE=1`.
 
-- **Backend (Pytest):** tests unitarios sobre el Service Layer (ej. `RAGService` con mocks del LLM y del retriever), y tests de integración sobre los endpoints principales (`/subjects`, `/chat`, `/documents`) usando una base de datos de test.
-- **Frontend (Vitest + React Testing Library):** tests unitarios de componentes clave (formulario de carga de material, componente de chat).
-- **E2E (Playwright, planificado para la entrega final):** al menos un flujo completo — docente sube material → estudiante pregunta → recibe respuesta con fuente citada.
-- Cobertura: no obligatoria en esta entrega; se retoma explícitamente en la Entrega 3 (final), según la guía del máster.
+| Nivel | Herramienta | Qué cubre | Tests |
+|---|---|---|---|
+| Unitarios backend | Pytest | Service Layer con repositorios mockeados: `AuthService`, `RAGService` (con/sin material, historial, umbral, fallo del LLM), `DocumentService` (TXT, PDF, formatos no soportados, docente ajeno), `ConversationService` | 37 |
+| Integración backend | Pytest + FastAPI `TestClient` | Endpoints reales sobre **Postgres+pgvector de test**: auth, asignaturas y carga, chat (`sources` como array, 401/403/404/503), conversaciones y borrado en cascada, índice hnsw, `/health`, CORS | 61 |
+| Componentes frontend | Vitest + React Testing Library | `MessageBubble` (fuentes expandibles), `ChatWindow`, `LoginPage`, `FileUpload` | 19 |
+| E2E | Playwright (Chromium) | Docente sube material → estudiante pregunta → respuesta con **Fuentes** → historial → borrado | 1 |
+
+Cobertura del backend: **92 %** de las líneas de `app/` (`pytest --cov=app`).
+
+**Cómo ejecutarlos** (desde la raíz, con la base de datos arriba: `docker compose up -d`):
+
+```bash
+# Backend: crea la base de test una sola vez y ejecuta unitarios + integración
+docker exec asistenteia-postgres psql -U postgres -c "CREATE DATABASE asistenteia_test"
+cd backend
+pip install -r requirements-dev.txt
+pytest --cov=app                 # TEST_DATABASE_URL opcional; por defecto localhost:5434/asistenteia_test
+
+# Frontend: componentes
+cd ../frontend
+npm run test
+
+# E2E (la primera vez: npx playwright install chromium)
+npm run test:e2e
+```
+
+El E2E levanta por sí solo su propio backend (puerto 8001, base `asistenteia_e2e`, migraciones incluidas, `LLM_FAKE=1`) y su propio Vite (puerto 5174), así que no interfiere con el entorno de desarrollo (8000 / 5173). Necesita el entorno virtual del backend creado en `backend/venv` (o `E2E_PYTHON` apuntando a otro intérprete) y Postgres arriba. Usa el modelo de embeddings real, por lo que la primera ejecución tarda más.
 
 ---
 

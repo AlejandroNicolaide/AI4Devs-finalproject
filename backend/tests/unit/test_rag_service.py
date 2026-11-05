@@ -259,3 +259,16 @@ def test_threshold_boundary_is_inclusive(deps, llm, monkeypatch):
     result = deps.service.answer(deps.db, USER_ID, SUBJECT_ID, "mitosis")
 
     assert len(result.sources) == 1
+
+
+# --- Seam de pruebas E2E ---
+
+
+def test_llm_fake_returns_fixed_answer_without_calling_gemini(monkeypatch):
+    monkeypatch.setattr(rag_module.settings, "LLM_FAKE", True)
+    monkeypatch.setattr(rag_module.settings, "GEMINI_API_KEY", "")
+
+    answer = RAGService._call_llm([HumanMessage(content="hola")])
+
+    assert answer == rag_module.FAKE_LLM_ANSWER
+

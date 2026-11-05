@@ -26,6 +26,8 @@ NO_RELEVANT_ANSWER = (
     "Prueba a reformularla o consulta directamente con el docente."
 )
 
+FAKE_LLM_ANSWER = "Respuesta de prueba generada a partir del material de la asignatura."
+
 SYSTEM_PROMPT = (
     "Eres un asistente académico. Responde a la pregunta del estudiante usando EXCLUSIVAMENTE "
     "los fragmentos de material de la asignatura que se te proporcionan. Si los fragmentos no "
@@ -92,6 +94,8 @@ class RAGService:
 
     @staticmethod
     def _call_llm(prompt: list) -> str:
+        if settings.LLM_FAKE:  # seam de pruebas E2E: respuesta determinista sin llamar a Gemini
+            return FAKE_LLM_ANSWER
         if not settings.GEMINI_API_KEY:
             raise LLMUnavailableError("GEMINI_API_KEY no configurada")
         llm = ChatGoogleGenerativeAI(

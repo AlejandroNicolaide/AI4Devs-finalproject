@@ -51,9 +51,9 @@
 
 ## 8. Test E2E con Playwright
 
-- [ ] 8.1 Añadir `LLM_FAKE` a `Settings` y a `_call_llm` (solo test, desactivado por defecto) con un test unitario; instalar `@playwright/test` y crear `playwright.config.ts`
-- [ ] 8.2 Spec `e2e/chat-flow.spec.ts`: docente crea asignatura y sube un TXT → estudiante pregunta → la respuesta muestra "Fuentes" → historial → eliminar; verificar `npx playwright test` en verde con el stack local y `LLM_FAKE=1`
-- [ ] 8.3 Documentar los prerrequisitos y el comando del E2E en el README (sección Pruebas)
+- [x] 8.1 Añadir `LLM_FAKE` a `Settings` y a `_call_llm` (solo test, desactivado por defecto) con un test unitario; instalar `@playwright/test` y crear `playwright.config.ts`
+- [x] 8.2 Spec `e2e/chat-flow.spec.ts`: docente crea asignatura y sube un TXT → estudiante pregunta → la respuesta muestra "Fuentes" → historial → eliminar; verificar `npx playwright test` en verde con el stack local y `LLM_FAKE=1`
+- [x] 8.3 Documentar los prerrequisitos y el comando del E2E en el README (sección Pruebas)
 
 ## 9. CI y PR de tests
 

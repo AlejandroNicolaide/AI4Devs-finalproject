@@ -71,3 +71,7 @@ def test_similarity_threshold_parsing(raw, expected):
 
 def test_similarity_threshold_is_disabled_by_default():
     assert make_settings().SIMILARITY_THRESHOLD is None
+
+
+def test_llm_fake_is_disabled_by_default():
+    assert make_settings().LLM_FAKE is False
