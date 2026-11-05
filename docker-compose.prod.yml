@@ -1,0 +1,54 @@
+# Stack de producción para Dokploy (aplicación de tipo "Compose"): base de datos, API y frontend.
+# Las variables se definen en el panel de Dokploy (Environment), nunca en el repositorio.
+# Los dominios se asignan en la pestaña "Domains" de Dokploy: backend -> puerto 8000, frontend -> puerto 80.
+# Guía completa en readme.md (sección "Despliegue en Dokploy").
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg15 # el Postgres gestionado de Dokploy NO incluye la extensión pgvector
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?define POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-asistenteia}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # POSTGRES_PASSWORD debe ser alfanumérica (va dentro de la URL)
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-asistenteia}
+      SECRET_KEY: ${SECRET_KEY:?define SECRET_KEY (cadena aleatoria larga)}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash-lite}
+      CORS_ORIGINS: ${CORS_ORIGINS:?define CORS_ORIGINS (URL pública del frontend)}
+      SIMILARITY_THRESHOLD: ${SIMILARITY_THRESHOLD:-}
+      RUN_SEED: ${RUN_SEED:-1}
+    expose:
+      - "8000"
+    # Al arrancar migra y carga el seed (genera embeddings): puede tardar un par de minutos en responder /health.
+    # Necesita ~1,5 GB de RAM por el modelo de embeddings local: el servidor debería tener 2 GB o más.
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:?define VITE_API_URL (URL pública de la API)}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    expose:
+      - "80"
+
+volumes:
+  pgdata:
