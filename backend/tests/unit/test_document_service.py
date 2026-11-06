@@ -81,6 +81,45 @@ def test_empty_document_is_rejected(service, repos):
     repos.document.create.assert_not_called()
 
 
+def _fake_pdf_reader(monkeypatch, pages):
+    reader = SimpleNamespace(pages=[SimpleNamespace(extract_text=lambda text=text: text) for text in pages])
+    monkeypatch.setattr("app.services.document_service.PdfReader", lambda _stream: reader)
+
+
+def test_scanned_pdf_with_only_a_repeated_watermark_is_rejected(service, repos, monkeypatch):
+    _fake_pdf_reader(monkeypatch, ["Scanned by CamScanner"] * 4)
+
+    with pytest.raises(EmptyDocumentError):
+        service.upload_document(MagicMock(), SUBJECT_ID, TEACHER_ID, "escaneo.pdf", b"%PDF")
+
+    repos.document.create.assert_not_called()
+
+
+def test_pdf_with_a_repeated_header_but_real_text_is_accepted(service, repos, monkeypatch):
+    _fake_pdf_reader(
+        monkeypatch,
+        ["Unidad 1\nLa mitosis genera dos células hijas", "Unidad 1\nLa meiosis genera cuatro gametos"],
+    )
+
+    _, count = service.upload_document(MagicMock(), SUBJECT_ID, TEACHER_ID, "unidad.pdf", b"%PDF")
+
+    assert count >= 1
+    assert "mitosis" in repos.chunk.create_bulk.call_args.args[1][0]["content"]
+
+
+@pytest.mark.parametrize(
+    ("pages", "expected"),
+    [
+        (["Scanned by CamScanner"] * 3, False),
+        (["Scanned by CamScanner\nTexto real", "Scanned by CamScanner\nOtro texto"], True),
+        (["Una sola página con texto"], True),
+        (["", "  "], False),
+    ],
+)
+def test_has_content_beyond_repeated_lines(pages, expected):
+    assert DocumentService._has_content_beyond_repeated_lines(pages) is expected
+
+
 def test_teacher_who_does_not_own_the_subject_is_rejected(service, repos):
     """Escenario: Intento de carga en asignatura ajena (403)."""
     with pytest.raises(NotSubjectOwnerError):

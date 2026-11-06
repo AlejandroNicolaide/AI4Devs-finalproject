@@ -4,7 +4,7 @@
 
 - [x] 1.1 Añadir a `.gitignore` `*.log`, `.agents/`, `.claude/`, `entrega.md`, los `.md` de lecciones y el PDF de la devolución; verificar con `git status` que solo quedan archivos del proyecto como candidatos a commit
 - [x] 1.2 Verificar que no hay `.env` ni claves versionadas: `git ls-files | grep -i "\.env$"` vacío y `git grep -n "AIza"` sin resultados
-- [ ] 1.3 Commitear el change `entrega-3-final` (artefactos OpenSpec) en `final-project-AN` y publicar la rama; verificar con `git log origin/final-project-AN`
+- [x] 1.3 Commitear el change `entrega-3-final` (artefactos OpenSpec) en `final-project-AN` y publicar la rama; verificar con `git log origin/final-project-AN`
 - [x] 1.4 Crear `feature/tests` desde `final-project-AN`; verificar con `git branch --show-current`
 
 ## 2. Historial de conversación en las respuestas (HU-2)
@@ -57,8 +57,8 @@
 
 ## 9. CI y PR de tests
 
-- [ ] 9.1 Crear `.github/workflows/ci.yml` (job backend con servicio pgvector y job frontend); verificar que el workflow queda en verde en GitHub
-- [ ] 9.2 Subir `feature/tests`, abrir el PR hacia `final-project-AN` en el repo propio (base correcta, no el repo de LIDR) y ejecutar `/code-review` sobre él; verificar el PR abierto y las observaciones tratadas
+- [x] 9.1 Crear `.github/workflows/ci.yml` (job backend con servicio pgvector y job frontend); verificar que el workflow queda en verde en GitHub
+- [x] 9.2 Subir `feature/tests`, abrir el PR hacia `final-project-AN` en el repo propio (base correcta, no el repo de LIDR) y ejecutar `/code-review` sobre él; verificar el PR abierto y las observaciones tratadas
 
 ## 10. Despliegue en Dokploy
 
@@ -67,20 +67,20 @@
 - [x] 10.3 `frontend/Dockerfile` (multistage, `VITE_API_URL` como build-arg) y `frontend/nginx.conf` con fallback SPA; verificar `docker build` y que la SPA carga y navega por URL directa
 - [x] 10.4 `docker-compose.prod.yml` (`pgvector/pgvector:pg15`, backend, frontend, volumen, healthchecks); verificar `docker compose -f docker-compose.prod.yml up --build` en local con login y pregunta con fuentes
 - [x] 10.5 Redactar la guía de Dokploy en el README: variables exactas (`DATABASE_URL`, `SECRET_KEY`, `GEMINI_API_KEY`, `GEMINI_MODEL`, `CORS_ORIGINS`, `VITE_API_URL`, `POSTGRES_*`), dominios `app.` y `api.` con HTTPS, requisito de RAM y uso de `scripts/init_db.sql`; verificar que cada variable existe en `config.py` o en los compose
-- [ ] 10.6 Subir `feature/deploy`, abrir el PR hacia `final-project-AN` y ejecutar `/code-review`; verificar el PR
+- [x] 10.6 Subir `feature/deploy`, abrir el PR hacia `final-project-AN` y ejecutar `/code-review`; verificar el PR
 - [ ] 10.7 (Lo ejecuta el usuario en su VPS) Desplegar en Dokploy y comprobar `https://api.<dominio>/health` y el flujo con credenciales del seed; registrar la URL pública
 
 ## 11. Documentación final
 
 - [x] 11.1 Crear `feature/docs-final` desde `final-project-AN` actualizada
-- [ ] 11.2 README: URL pública (0.4), instalación y Docker (1.4), estructura real (2.3), infraestructura y CI reales (2.4), seguridad sin el consentimiento en el primer login y con HTTPS (2.5), tests reales y sección "Pruebas" con cobertura (2.6), numeración de la sección 4, nice-to-have del umbral (1.2) y PRs reales (7); verificar con una lectura contra el código que cada afirmación es cierta
+- [ ] 11.2 (pendiente solo la URL pública del punto 0.4) README: URL pública (0.4), instalación y Docker (1.4), estructura real (2.3), infraestructura y CI reales (2.4), seguridad sin el consentimiento en el primer login y con HTTPS (2.5), tests reales y sección "Pruebas" con cobertura (2.6), numeración de la sección 4, nice-to-have del umbral (1.2) y PRs reales (7); verificar con una lectura contra el código que cada afirmación es cierta
 - [x] 11.3 `prompts.md`: secciones de tests, despliegue y mantenimiento (máximo 3 prompts por sección), tabla "IA por fase" con las 6 fases y resumen del flujo de IA (herramientas, modelos, contexto y ajustes humanos); verificar que no quedan textos de plantilla
-- [ ] 11.4 Subir `feature/docs-final`, abrir el PR hacia `final-project-AN` y ejecutar `/code-review`; verificar el PR
+- [x] 11.4 Subir `feature/docs-final`, abrir el PR hacia `final-project-AN` y ejecutar `/code-review`; verificar el PR
 
 ## 12. Cierre e integración
 
-- [ ] 12.1 Fusionar los tres PRs en `final-project-AN` y ejecutar en limpio `pytest`, `npm run test`, `npm run build` y el E2E; verificar todo en verde
-- [ ] 12.2 Recorrer el checklist de la Lección 3 contra la rama remota (README, prompts.md, 3-5 funcionalidades, tests, evidencia, sin secretos, nombre de rama `final-project-AN`) y anotar el resultado
+- [x] 12.1 Fusionar los tres PRs en `final-project-AN` y ejecutar en limpio `pytest`, `npm run test`, `npm run build` y el E2E; verificar todo en verde
+- [x] 12.2 Recorrer el checklist de la Lección 3 contra la rama remota (README, prompts.md, 3-5 funcionalidades, tests, evidencia, sin secretos, nombre de rama `final-project-AN`) y anotar el resultado
 
 ## Workflow follow-up
 

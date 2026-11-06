@@ -398,6 +398,7 @@ Resultado: `backend/scripts/init_db.sql`, idempotente y equivalente a las migrac
   - PR 2 (despliegue): se corrigieron el `start-period` del healthcheck y el CI duplicado; se mantuvo el seed por defecto de forma deliberada (credenciales de demostración que exige la entrega).
   - PR 3 (documentación): la revisión encontró un fallo real fuera de lo que cubrían los tests: una segunda pregunta en una conversación ya abierta no aparecía hasta recargar la página. Se corrigió el hook, se amplió el E2E con un seguimiento y se comprobó que sin el arreglo el test falla. También se hizo reintentable el seed.
   - Los hallazgos que no se corrigieron (límite de tamaño de subida, carrera en el registro, etc.) se documentaron como limitaciones conocidas en la sección 2.5 del README.
+- **Prueba manual local antes del cierre:** el usuario probó la aplicación con un PDF propio y envió una captura (el chat respondía que no tenía información). El diagnóstico con la base de datos mostró que era un PDF escaneado con CamScanner: su única capa de texto era la marca de agua «Scanned by CamScanner» repetida, que se había indexado como si fuera contenido. El comportamiento del asistente era el correcto (no inventó un autor), pero la subida debía rechazar el documento. Se añadió una comprobación (líneas repetidas en más de la mitad de las páginas no cuentan como contenido), con sus tests, un 422 con un mensaje claro y la falta de OCR en las limitaciones del README.
 
 ### 14. Flujo de trabajo con IA (resumen)
 

@@ -119,7 +119,7 @@ El seed también crea la asignatura «Biología celular (demo)» con un document
 
 **Prueba rápida:** inicia sesión como estudiante → abre «Biología celular (demo)» → «Preguntar al asistente» → revisa la respuesta y sus fuentes. Para el flujo de docente: inicia sesión como docente → crea una asignatura → sube un PDF o TXT → vuelve a entrar como estudiante y pregunta sobre su contenido.
 
-**Más información:** cómo ejecutar los tests en 2.6 (backend 99, frontend 19, E2E 1; cobertura 92 % en backend) y cómo desplegar con Docker/Dokploy en 2.4.
+**Más información:** cómo ejecutar los tests en 2.6 (backend 105, frontend 19, E2E 1; cobertura 92 % en backend) y cómo desplegar con Docker/Dokploy en 2.4.
 
 ---
 
@@ -287,6 +287,8 @@ flowchart LR
 **Limitaciones conocidas** (detectadas en las revisiones `/code-review` de los PRs; no bloquean el flujo del MVP y quedan como mejoras):
 
 - La subida de documentos no limita el tamaño del archivo ni captura los PDF cifrados o corruptos (devolverían 500).
+- No hay OCR: un PDF escaneado (solo imágenes) no tiene texto que indexar. Si lo único con texto es una marca repetida en todas las páginas (p. ej. «Scanned by CamScanner»), la subida se rechaza con un 422; hay que usar un PDF con texto seleccionable o un TXT.
+- El registro es abierto y cualquiera puede elegir el rol `teacher`, con lo que puede crear asignaturas y subir material (no hay verificación de docentes ni inscripción: decisión de alcance del MVP).
 - Dos registros simultáneos con el mismo email pueden devolver 500 en lugar de 409; la longitud máxima de la contraseña se valida en caracteres y bcrypt cuenta bytes.
 - La recuperación de fragmentos usa solo el texto de la pregunta: un seguimiento muy elíptico («¿y la segunda?») puede no encontrar material aunque el historial sí se envíe al modelo.
 - La transacción de base de datos permanece abierta durante la llamada a Gemini (hasta 60 s); con muchas preguntas lentas simultáneas el pool de conexiones puede agotarse.
@@ -300,7 +302,7 @@ La suite cubre los tres niveles pedidos y se traza a los escenarios Gherkin de l
 
 | Nivel | Herramienta | Qué cubre | Tests |
 |---|---|---|---|
-| Unitarios backend | Pytest | Service Layer con repositorios mockeados: `AuthService`, `RAGService` (con/sin material, historial, umbral, fallo del LLM), `DocumentService` (TXT, PDF, formatos no soportados, docente ajeno), `ConversationService` | 38 |
+| Unitarios backend | Pytest | Service Layer con repositorios mockeados: `AuthService`, `RAGService` (con/sin material, historial, umbral, fallo del LLM), `DocumentService` (TXT, PDF, formatos no soportados, docente ajeno), `ConversationService` | 44 |
 | Integración backend | Pytest + FastAPI `TestClient` | Endpoints reales sobre **Postgres+pgvector de test**: auth, asignaturas y carga, chat (`sources` como array, 401/403/404/503), conversaciones y borrado en cascada, índice hnsw, `/health`, CORS | 61 |
 | Componentes frontend | Vitest + React Testing Library | `MessageBubble` (fuentes expandibles), `ChatWindow`, `LoginPage`, `FileUpload` | 19 |
 | E2E | Playwright (Chromium) | Docente sube material → estudiante pregunta → respuesta con **Fuentes** → historial → borrado | 1 |
@@ -886,7 +888,7 @@ Las tres Pull Requests de la entrega final se abrieron en este mismo repositorio
 **Pull Request 1 — [#1 Tests, historial en respuestas, umbral de similitud y CI](https://github.com/AlejandroNicolaide/AI4Devs-finalproject/pull/1)** (`feature/tests`)
 
 - Historial de la conversación en el prompt (criterio de aceptación de la HU-2), umbral de similitud opcional, `GET /health` y CORS configurable.
-- Suite de tests: 99 de backend (92 % de cobertura), 19 de frontend y 1 E2E con Playwright.
+- Suite de tests: 99 en el momento del PR (105 en la rama final) de backend (92 % de cobertura), 19 de frontend y 1 E2E con Playwright.
 - Workflow de GitHub Actions con pytest sobre pgvector, lint, build y Vitest.
 - Revisión `/code-review`: 10 hallazgos. Se corrigieron tres (historial que podía empezar con una respuesta del asistente, subida de documentos que bloqueaba el servidor y aviso al activar `LLM_FAKE`); el resto son limitaciones previas documentadas.
 

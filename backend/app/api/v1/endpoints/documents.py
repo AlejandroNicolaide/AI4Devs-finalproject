@@ -39,7 +39,7 @@ def upload_document(teacher: CurrentTeacher, subject_id: uuid.UUID, file: Upload
     except EmptyDocumentError:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="No se pudo extraer texto del documento",
+            detail="No se pudo extraer texto del documento. Si es un PDF escaneado, necesita texto seleccionable (no se aplica OCR)",
         )
     return DocumentResponse(id=document.id, filename=document.filename, chunks_created=chunks_created)
 

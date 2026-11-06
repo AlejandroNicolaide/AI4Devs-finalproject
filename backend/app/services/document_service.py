@@ -54,11 +54,27 @@ class DocumentService:
         return subject
 
     @staticmethod
+    def _has_content_beyond_repeated_lines(pages: list[str]) -> bool:
+        """False si, quitando las líneas repetidas en más de la mitad de las páginas, no queda texto."""
+        page_lines = [{line.strip() for line in text.splitlines() if line.strip()} for text in pages]
+        if len(pages) < 2:
+            return any(page_lines)
+        counts: dict[str, int] = {}
+        for lines in page_lines:
+            for line in lines:
+                counts[line] = counts.get(line, 0) + 1
+        return any(count <= len(pages) / 2 for count in counts.values())
+
+    @staticmethod
     def _extract_text(filename: str, content: bytes) -> str:
         name = filename.lower()
         if name.endswith(".pdf"):
             reader = PdfReader(io.BytesIO(content))
-            return "\n".join(page.extract_text() or "" for page in reader.pages)
+            pages = [page.extract_text() or "" for page in reader.pages]
+            if not DocumentService._has_content_beyond_repeated_lines(pages):
+                # p. ej. un escaneo (CamScanner...): solo tiene texto la marca de agua repetida en cada página
+                raise EmptyDocumentError(filename)
+            return "\n".join(pages)
         if name.endswith(".txt"):
             try:
                 return content.decode("utf-8")
