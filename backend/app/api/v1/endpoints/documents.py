@@ -20,8 +20,9 @@ document_service = DocumentService()
 
 
 @router.post("", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
-async def upload_document(teacher: CurrentTeacher, subject_id: uuid.UUID, file: UploadFile = File(...), db: Session = Depends(get_db)):
-    content = await file.read()
+def upload_document(teacher: CurrentTeacher, subject_id: uuid.UUID, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    # def (no async): la extracción y los embeddings son síncronos y pesados; FastAPI los ejecuta en un hilo y no congela /health
+    content = file.file.read()
     try:
         document, chunks_created = document_service.upload_document(
             db, subject_id, teacher.id, file.filename or "", content

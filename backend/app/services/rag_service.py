@@ -1,7 +1,7 @@
 import uuid
 from dataclasses import dataclass
 
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from sqlalchemy.orm import Session
 
@@ -14,11 +14,19 @@ from app.services.conversation_service import ConversationService
 from app.services.subject_service import SubjectService
 
 TOP_K = 5
+HISTORY_MESSAGES = 6  # mensajes previos de la conversación que se envían al modelo
 
 NO_MATERIAL_ANSWER = (
     "Esta asignatura todavía no tiene material disponible, por lo que no puedo responder "
     "tu pregunta. Consulta de nuevo cuando el docente haya subido contenido."
 )
+
+NO_RELEVANT_ANSWER = (
+    "No encontré información relevante sobre tu pregunta en el material de esta asignatura. "
+    "Prueba a reformularla o consulta directamente con el docente."
+)
+
+FAKE_LLM_ANSWER = "Respuesta de prueba generada a partir del material de la asignatura."
 
 SYSTEM_PROMPT = (
     "Eres un asistente académico. Responde a la pregunta del estudiante usando EXCLUSIVAMENTE "
@@ -67,16 +75,27 @@ class RAGService:
         self.conversation_service = conversation_service or ConversationService()
 
     @staticmethod
-    def _build_prompt(message: str, context: list[tuple[str, str]]) -> list:
+    def _build_prompt(
+        message: str,
+        context: list[tuple[str, str]],
+        history: list[tuple[str, str]] | None = None,
+    ) -> list:
+        """`history` son pares (role, content) previos de la conversación, en orden cronológico."""
         fragments = "\n\n".join(
             f"[Fragmento {i}] (fuente: {filename})\n{content}"
             for i, (filename, content) in enumerate(context, 1)
         )
+        previous = [
+            HumanMessage(content=text) if role == "user" else AIMessage(content=text)
+            for role, text in (history or [])
+        ]
         human = f"Fragmentos del material:\n\n{fragments}\n\nPregunta del estudiante: {message}"
-        return [SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=human)]
+        return [SystemMessage(content=SYSTEM_PROMPT), *previous, HumanMessage(content=human)]
 
     @staticmethod
     def _call_llm(prompt: list) -> str:
+        if settings.LLM_FAKE:  # seam de pruebas E2E: respuesta determinista sin llamar a Gemini
+            return FAKE_LLM_ANSWER
         if not settings.GEMINI_API_KEY:
             raise LLMUnavailableError("GEMINI_API_KEY no configurada")
         llm = ChatGoogleGenerativeAI(
@@ -116,6 +135,15 @@ class RAGService:
         self.subject_service.get_subject(db, subject_id)  # SubjectNotFoundError si no existe
         conversation = self._resolve_conversation(db, user_id, subject_id, conversation_id)
 
+        # el historial se lee antes de persistir la pregunta actual para no duplicarla en el prompt
+        history: list[tuple[str, str]] = []
+        if conversation_id is not None:
+            previous = self.conversation_service.get_recent_messages(db, conversation.id, HISTORY_MESSAGES)
+            history = [(m.role, m.content) for m in previous]
+            # el recorte por número de mensajes puede dejar una respuesta suelta al inicio y Gemini exige que abra el usuario
+            while history and history[0][0] != "user":
+                history.pop(0)
+
         chunks = []
         filenames: dict[uuid.UUID, str] = {}
 
@@ -125,16 +153,24 @@ class RAGService:
         else:
             # (2) embedding de la pregunta, (3) búsqueda top-k por coseno
             query_embedding = get_embeddings().embed_query(message)
-            chunks = self.chunk_repository.find_similar(db, subject_id, query_embedding, TOP_K)
-            documents = self.document_repository.get_by_ids(db, list({c.document_id for c in chunks}))
-            filenames = {d.id: d.filename for d in documents}
-            # (4) prompt + (5) Gemini
-            context = [(filenames[c.document_id], c.content) for c in chunks]
-            try:
-                answer_text = self._call_llm(self._build_prompt(message, context))
-            except LLMUnavailableError:
-                db.rollback()  # descarta la conversación recién creada
-                raise
+            scored = self.chunk_repository.find_similar(db, subject_id, query_embedding, TOP_K)
+            threshold = settings.SIMILARITY_THRESHOLD
+            if threshold is not None:  # similitud coseno = 1 - distancia
+                scored = [(c, d) for c, d in scored if 1 - d >= threshold]
+            chunks = [c for c, _ in scored]
+            if not chunks:
+                # (3b) ningún fragmento relevante -> respuesta controlada, sin llamar al LLM
+                answer_text = NO_RELEVANT_ANSWER
+            else:
+                documents = self.document_repository.get_by_ids(db, list({c.document_id for c in chunks}))
+                filenames = {d.id: d.filename for d in documents}
+                # (4) prompt + (5) Gemini
+                context = [(filenames[c.document_id], c.content) for c in chunks]
+                try:
+                    answer_text = self._call_llm(self._build_prompt(message, context, history))
+                except LLMUnavailableError:
+                    db.rollback()  # descarta la conversación recién creada
+                    raise
 
         # (6) persistencia de mensajes y fuentes
         self.conversation_repository.add_message(db, conversation.id, "user", message)

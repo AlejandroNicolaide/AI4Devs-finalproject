@@ -44,6 +44,9 @@ class ConversationService:
         self.get_owned_conversation(db, user_id, conversation_id)
         return self.conversation_repository.get_messages(db, conversation_id)
 
+    def get_recent_messages(self, db: Session, conversation_id: uuid.UUID, limit: int) -> list[Message]:
+        return self.conversation_repository.get_recent_messages(db, conversation_id, limit)
+
     def delete_conversation(self, db: Session, user_id: uuid.UUID, conversation_id: uuid.UUID) -> None:
         self.get_owned_conversation(db, user_id, conversation_id)
         self.conversation_repository.delete(db, conversation_id)
