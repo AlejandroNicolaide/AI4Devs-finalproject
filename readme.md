@@ -896,7 +896,7 @@ Las tres Pull Requests de la entrega final se abrieron en este mismo repositorio
 - Guía de despliegue en Dokploy (variables, dominios, HTTPS, RAM necesaria).
 - Revisión `/code-review`: se corrigieron el `start-period` del healthcheck y la ejecución duplicada del CI; se mantuvo el seed por defecto de forma deliberada (credenciales de demostración exigidas por la entrega).
 
-**Pull Request 3 — [#3 Documentación final: README y prompts.md](https://github.com/AlejandroNicolaide/AI4Devs-finalproject/pull/3)** (`feature/docs-final`)
+**Pull Request 3 — [#3 Documentación final y correcciones de la revisión](https://github.com/AlejandroNicolaide/AI4Devs-finalproject/pull/3)** (`feature/docs-final`)
 
 - README alineado con lo construido (infraestructura real, seguridad, estructura, API, tests, despliegue) y limitaciones conocidas.
 - `prompts.md` ampliado con las secciones de pruebas, despliegue y mantenimiento, el resumen del flujo de IA y la tabla de IA por fase.
