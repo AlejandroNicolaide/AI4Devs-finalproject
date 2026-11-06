@@ -2,8 +2,8 @@ name: CI
 
 on:
   push:
-    branches: [main, "final-project-*", "feature/**"]
-  pull_request:
+    branches: [main, "final-project-*"]
+  pull_request: # las ramas feature/** se validan por su PR; así no corre el pipeline dos veces
 
 concurrency:
   group: ci-${{ github.ref }}
