@@ -103,7 +103,7 @@ Variables opcionales:
 - `SIMILARITY_THRESHOLD`: similitud coseno mínima (0-1) para citar un fragmento. Vacío (por defecto) = sin filtro. Si ningún fragmento lo supera, el asistente responde que no encontró información relevante en el material y no llama a Gemini. Calibrado con el material de demostración y el modelo de embeddings real: las preguntas relevantes obtienen entre 0,19 y 0,81 y las ajenas al temario no pasan de 0,10, por lo que **0,15** es un valor conservador. Con más material y fragmentos más pequeños conviene recalibrarlo.
 
 **Notas:**
-- La primera subida de un documento descarga el modelo de embeddings de HuggingFace (~120 MB, puede tardar unos minutos); después queda en caché.
+- La primera subida de un documento descarga el modelo de embeddings de HuggingFace (~460 MB, puede tardar unos minutos); después queda en caché.
 - Sin `GEMINI_API_KEY` el resto de la aplicación funciona, pero `/chat` responde 503 en asignaturas con material.
 - Los datos de demostración se cargan con `python -m app.seed` (desde `backend/`, con la base ya migrada). Es idempotente y la primera vez descarga el modelo de embeddings.
 
@@ -205,27 +205,53 @@ La estructura del `backend` refleja directamente las capas descritas en 2.1/2.2 
 
 ### **2.4. Infraestructura y despliegue**
 
-> Nota: a fecha de la Entrega 2 el proyecto se ejecuta solo en local: PostgreSQL con pgvector en Docker (`docker-compose.yml`), backend FastAPI con uvicorn y frontend con Vite (ver 1.4). Esta sección describe el plan de infraestructura y despliegue previsto para la entrega final.
-
 ```mermaid
 flowchart LR
-    Dev["Repositorio GitHub\n(main / ramas de entrega)"] -- "push / PR" --> CI["GitHub Actions\n(build + tests)"]
-    CI -- "deploy automático" --> FE["Vercel\nFrontend (React)"]
-    CI -- "deploy automático" --> BE["Render / Railway\nBackend (FastAPI, Docker)"]
-    BE --> DB[("Supabase Postgres\ncon extensión pgvector")]
+    Dev["Repositorio GitHub\n(final-project-AN)"] -- "push / PR" --> CI["GitHub Actions\npytest + lint + build + vitest"]
+    Dev -- "deploy (Git)" --> DK["Dokploy (VPS)\ndocker-compose.prod.yml"]
+    subgraph VPS["VPS con Dokploy + Traefik (HTTPS Let's Encrypt)"]
+        FE["frontend\nnginx + build de Vite"]
+        BE["backend\nFastAPI + modelo de embeddings"]
+        DB[("postgres\npgvector/pgvector:pg15")]
+    end
+    DK --> VPS
+    Usuario["Usuario (docente/estudiante)"] -- "https://app.tu-dominio" --> FE
+    FE -- "https://api.tu-dominio" --> BE
+    BE --> DB
     BE --> LLMEXT["Gemini API"]
-    Usuario["Usuario (docente/estudiante)"] --> FE
-    FE --> BE
 ```
 
-**Componentes de infraestructura:**
-- **Frontend:** desplegado en **Vercel**, con integración directa al repositorio (deploy automático en cada push a la rama principal).
-- **Backend:** desplegado en **Render** o **Railway** como contenedor (Docker), a partir de la carpeta `backend/`.
-- **Base de datos:** **Supabase Postgres**, que incluye la extensión `pgvector` habilitada por defecto, evitando gestionar infraestructura de base de datos propia.
-- **CI/CD:** **GitHub Actions**, con un workflow simple que ejecuta build y tests en cada push/PR antes de habilitar el despliegue automático.
-- **Secretos:** claves de API (Gemini) y credenciales de base de datos gestionadas como variables de entorno en cada plataforma (Vercel/Render), nunca versionadas en el repositorio.
+**Componentes:**
+- **Orquestación:** `docker-compose.prod.yml` define tres servicios (`postgres`, `backend`, `frontend`) con volumen persistente para la base de datos y healthchecks. Se despliega como aplicación *Compose* en **Dokploy**, que construye las imágenes desde el repositorio y las publica detrás de Traefik con certificados Let's Encrypt.
+- **Base de datos:** imagen `pgvector/pgvector:pg15`, la misma que en local. El Postgres gestionado de Dokploy no incluye la extensión `pgvector`, por eso se despliega como servicio del compose.
+- **Backend:** `backend/Dockerfile` (Python 3.11, torch solo CPU, modelo de embeddings descargado al construir la imagen). Al arrancar ejecuta `alembic upgrade head`, carga los datos de demostración (`RUN_SEED=1`, idempotente) y lanza uvicorn. Expone `GET /health`.
+- **Frontend:** `frontend/Dockerfile` en dos etapas (build de Vite → nginx con fallback de SPA). La URL de la API se incrusta en el build (`VITE_API_URL`).
+- **CI:** `.github/workflows/ci.yml` ejecuta en cada push y pull request `pytest` (con un servicio `pgvector/pgvector:pg15`), `npm run lint`, `npm run build` y `npm run test`. El E2E de Playwright se ejecuta en local (ver 2.6).
 
-Esta combinación se eligió por ser gestionada (sin necesidad de administrar servidores, Kubernetes o Terraform), adecuada al alcance de un MVP académico, con despliegue automático desde el propio repositorio.
+#### Despliegue en Dokploy
+
+**Requisitos:** un VPS con Dokploy instalado y **2 GB de RAM o más** (el modelo de embeddings local ocupa ~1-1,5 GB), y un dominio con dos registros DNS `A` hacia la IP del VPS: `app.<dominio>` (frontend) y `api.<dominio>` (backend).
+
+1. En Dokploy: *Create Service → Compose*, proveedor **Git/GitHub**, repositorio `AlejandroNicolaide/AI4Devs-finalproject`, rama `final-project-AN`, *Compose Path* `./docker-compose.prod.yml`.
+2. En la pestaña **Environment**, definir estas variables (no se guardan en el repositorio):
+
+| Variable | Obligatoria | Valor |
+|---|---|---|
+| `POSTGRES_PASSWORD` | Sí | Contraseña de la base de datos. **Alfanumérica** (se inserta en la URL de conexión) |
+| `SECRET_KEY` | Sí | Cadena aleatoria larga para firmar los JWT (por ejemplo `openssl rand -hex 32`) |
+| `GEMINI_API_KEY` | Sí para el chat | API key de Google AI Studio. Sin ella el chat responde 503 |
+| `CORS_ORIGINS` | Sí | URL pública del frontend, p. ej. `https://app.<dominio>` |
+| `VITE_API_URL` | Sí | URL pública de la API, p. ej. `https://api.<dominio>` (se incrusta al construir el frontend) |
+| `GEMINI_MODEL` | No | Por defecto `gemini-3.5-flash-lite` |
+| `SIMILARITY_THRESHOLD` | No | Vacío = sin filtro; `0.15` recomendado (ver 1.4) |
+| `RUN_SEED` | No | `1` (por defecto) crea los usuarios y la asignatura de demostración; `0` los omite |
+| `POSTGRES_USER`, `POSTGRES_DB` | No | Por defecto `postgres` y `asistenteia` |
+
+3. En la pestaña **Domains**, añadir `app.<dominio>` → servicio `frontend`, puerto `80`, y `api.<dominio>` → servicio `backend`, puerto `8000`, ambos con **HTTPS** y certificado *Let's Encrypt*.
+4. Pulsar **Deploy**. La primera vez el backend tarda un par de minutos en responder (migra, genera los embeddings del seed y carga el modelo).
+5. Comprobar `https://api.<dominio>/health` → `{"status":"ok"}` y entrar en `https://app.<dominio>` con las credenciales de prueba (ver 1.4).
+
+**Alternativa manual para el esquema:** `backend/scripts/init_db.sql` crea todas las tablas, la extensión `vector` y el índice hnsw (equivale a las migraciones y deja `alembic_version` al día): `psql "<DATABASE_URL>" -f backend/scripts/init_db.sql`.
 
 ### **2.5. Seguridad**
 
