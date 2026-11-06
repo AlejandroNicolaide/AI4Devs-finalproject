@@ -192,6 +192,20 @@ def test_follow_up_question_sends_previous_messages_to_the_model(deps, llm):
     assert sum("¿Y cuántas fases tiene?" in m.content for m in prompt) == 1
 
 
+def test_history_cut_in_the_middle_of_a_turn_starts_with_a_user_message(deps, llm):
+    deps.conversation_service.get_recent_messages.return_value = [
+        SimpleNamespace(role="assistant", content="respuesta suelta"),
+        SimpleNamespace(role="user", content="¿Qué es la mitosis?"),
+        SimpleNamespace(role="assistant", content="Es la división celular."),
+    ]
+
+    deps.service.answer(deps.db, USER_ID, SUBJECT_ID, "¿Y las fases?", conversation_id=deps.conversation.id)
+
+    prompt = llm[0]
+    assert [type(m) for m in prompt] == [SystemMessage, HumanMessage, AIMessage, HumanMessage]
+    assert all("respuesta suelta" not in m.content for m in prompt)
+
+
 def test_history_is_read_with_the_configured_limit(deps, llm):
     deps.service.answer(deps.db, USER_ID, SUBJECT_ID, "otra", conversation_id=deps.conversation.id)
 

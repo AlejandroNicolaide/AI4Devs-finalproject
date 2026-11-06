@@ -140,6 +140,9 @@ class RAGService:
         if conversation_id is not None:
             previous = self.conversation_service.get_recent_messages(db, conversation.id, HISTORY_MESSAGES)
             history = [(m.role, m.content) for m in previous]
+            # el recorte por número de mensajes puede dejar una respuesta suelta al inicio y Gemini exige que abra el usuario
+            while history and history[0][0] != "user":
+                history.pop(0)
 
         chunks = []
         filenames: dict[uuid.UUID, str] = {}
