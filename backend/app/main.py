@@ -1,8 +1,14 @@
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.endpoints import auth, chat, conversations, documents, health, subjects
 from app.core.config import settings
+
+logger = logging.getLogger("uvicorn.error")
+if settings.LLM_FAKE:
+    logger.warning("LLM_FAKE activo: el chat devuelve una respuesta fija y NO llama a Gemini (solo para pruebas)")
 
 app = FastAPI(title="AsistenteIA API", version="0.1.0")
 
