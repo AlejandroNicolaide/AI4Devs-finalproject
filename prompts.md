@@ -11,6 +11,13 @@ Puedes añadir adicionalmente la conversación completa como link o archivo adju
 5. [Historias de usuario](#5-historias-de-usuario)
 6. [Tickets de trabajo](#6-tickets-de-trabajo)
 7. [Pull requests](#7-pull-requests)
+8. [Preparación para implementación (CLAUDE.md)](#8-preparación-para-implementación-claudemd)
+9. [Implementación de la Entrega 2](#9-implementación-de-la-entrega-2-openspec--claude-code)
+10. [Entrega final: planificación](#10-entrega-final-planificación-a-partir-de-la-guía-y-de-la-devolución-de-la-entrega-1)
+11. [Pruebas](#11-pruebas-unitarias-integración-y-e2e)
+12. [Despliegue](#12-despliegue-docker-dokploy-y-ci)
+13. [Mantenimiento](#13-mantenimiento)
+14. [Flujo de trabajo con IA (resumen)](#14-flujo-de-trabajo-con-ia-resumen)
 
 ---
 
@@ -306,3 +313,109 @@ Resultado: se listaron los modelos disponibles para la key y se probaron en orde
 - **React 18:** la plantilla de Vite traía React 19; se fijó React 18 por CLAUDE.md. Tailwind v3 (no v4) por coherencia con `tailwind.config.js` del plan.
 - **Desviaciones menores respecto a las tareas:** se añadió `GET /subjects/{id}` (lo necesita la vista de detalle), `ConversationService` (el router no puede llamar a repositories), `ON DELETE CASCADE` en `messages` y `message_sources` (necesario para el borrado GDPR) y el driver `postgresql+psycopg2://` (SQLAlchemy 2.1 usa psycopg v3 por defecto).
 - **Verificación:** sin tests automatizados (no exigidos en la Entrega 2); el flujo completo docente → estudiante → respuesta con fuentes → historial → borrado se validó manualmente en el navegador.
+
+---
+
+### 10. Entrega final: planificación a partir de la guía y de la devolución de la Entrega 1
+
+**Prompt 1 (plan de la entrega final):**
+
+```
+@Lección 1 @Lección 2 @Lección 3 @prompts.md @readme.md @Ejemplo_Proyectos Finales Reales.md @Proyecto Final Master AI4Devs.md
+en base a este contexto y a lo ultimo que hemos entregado debemos cumplir con la entre3 numero 3,
+para ello necesito revises estos elemento y armemos un plan de como continuar
+```
+
+Resultado: en modo plan, el asistente exploró el repositorio y contrastó la Lección 3 con lo construido. Detectó que faltaban la suite de tests, el despliegue y varias promesas del README que el código no cumplía. Planteó tres decisiones, que el usuario resolvió: evidencia mediante despliegue en Dokploy (sin vídeo), E2E con Playwright en navegador y `prompts.md` ampliado con `entrega.md` aparte.
+
+**Prompt 2 (segunda revisión, buscando lo que se olvidó):**
+
+```
+quiero que lo revises nuevamente y ademas me indiques sino nos olvidamos de algo o nos falta cumplimentar algo?
+```
+
+Resultado: el asistente encontró lo que podía bloquear la entrega: el Postgres por defecto de Dokploy no trae `pgvector`, el README prometía consentimiento GDPR en el primer login, GitHub Actions y un despliegue en Vercel/Render/Supabase que no existían, y el criterio de la HU-2 «la respuesta tiene en cuenta el historial» no estaba implementado.
+
+**Prompt 3 (contraste con la devolución de LIDR a la Entrega 1):**
+
+```
+@Alejandro Nicolaide - AsistenteIA - Entrega 1.pdf  esta es una devolucion de la entrega 1 repasemos primero de
+controlar que estemos en la entrega 2 en forma correcta de ser asi continuamos con el plan
+```
+
+Resultado: se comprobó en el código que las cuatro correcciones de diseño (inscripción simplificada, registro y acceso, `Document` separado de `DocumentChunk` con `MessageSource`, índice hnsw) estaban resueltas y se añadieron al plan los puntos pendientes de la devolución: IA en al menos 4 de las 6 fases, la memoria del modelo de embeddings local en el hosting y el umbral anti-alucinaciones.
+
+### 11. Pruebas (unitarias, integración y E2E)
+
+**Flujo:** el change de OpenSpec `entrega-3-final` (`/opsx:propose` → `/opsx:apply`) fijó las tareas; cada test se trazó al escenario Gherkin de la HU que verifica (HU-1 carga, HU-2 consulta, HU-3 borrado) y la IA generó el código de los tests a partir de esos criterios.
+
+**Prompt 1 (arranque de la implementación):**
+
+```
+/opsx:apply
+```
+
+Resultado: tareas 3 a 5 del change: infraestructura de tests con Postgres+pgvector real (SQLite no soporta `vector`), con rollback por test y con Gemini y embeddings sustituidos por dobles deterministas; 38 tests unitarios del Service Layer con repositorios mockeados y 61 de integración de endpoints. Cobertura del backend: 92 %.
+
+**Prompt 2 (decisión de diseño del E2E):** la IA propuso un seam `LLM_FAKE=1` (solo pruebas, desactivado por defecto) para que el E2E de Playwright sea determinista sin gastar cuota de Gemini. Resultado: un único test en navegador real recorre docente sube material → estudiante pregunta → respuesta con **Fuentes** → historial → borrado, con backend, base de datos y embeddings reales.
+
+**Prompt 3 (calibración con datos reales, no a ojo):** el umbral de similitud se calibró ejecutando el modelo de embeddings real sobre el material del seed: las preguntas relevantes obtuvieron entre 0,19 y 0,81 y las ajenas al temario no pasaron de 0,10, por lo que se recomienda 0,15 y se deja desactivado por defecto.
+
+**Ajustes y criterio humano en esta fase:**
+
+- **Pruebas de mutación manuales:** tras generar los tests se rompió a propósito el código (quitar el historial del prompt, renombrar «Fuentes») para comprobar que los tests fallan; en ambos casos fallaron los tests esperados y se restauró el código.
+- **Tests que la IA escribió mal y se corrigieron:** un test de relleno sin valor sobre el tamaño del material (eliminado), una tautología `if hasattr(...) else True` (sustituida por una comprobación real) y una aserción siempre verdadera en el test del umbral.
+- **Hallazgos al ejecutar:** el validador de emails rechaza el dominio reservado `.test` (se usó otro dominio en el E2E); el endpoint de formato no soportado devuelve 415, no 400/422 como suponían las tareas, y `/conversations/{id}/messages` no expone las fuentes, así que se ajustaron las tareas a la realidad en lugar de cambiar el código para que encajen.
+- **Vulnerabilidad:** `npm audit` marcó `follow-redirects` (dependencia transitiva de axios); se aplicó el parche menor y se verificó que no quedan vulnerabilidades.
+
+### 12. Despliegue (Docker, Dokploy y CI)
+
+**Prompt 1 (script de base de datos para el despliegue):**
+
+```
+dame un script de creacion de la base de datos dado que se daño es para luego poder desplegar y poder
+generar las variables del enviromment en dokploy correctamente
+```
+
+Resultado: `backend/scripts/init_db.sql`, idempotente y equivalente a las migraciones (tablas, extensión `vector`, índice hnsw y `alembic_version`), probado dos veces seguidas sobre una base temporal. Del mismo trabajo salió la lista de variables de entorno para Dokploy.
+
+**Prompt 2 (artefactos de despliegue):** tarea 10 del change `entrega-3-final` (`/opsx:apply`). Resultado: `backend/Dockerfile` (torch solo CPU y modelo de embeddings precargado en la imagen), `frontend/Dockerfile` con nginx y fallback de SPA, `docker-compose.prod.yml` con `pgvector/pgvector:pg15`, `/health`, CORS configurable por entorno y la guía de Dokploy en el README (variables, dominios y HTTPS).
+
+**Prompt 3 (CI):** `.github/workflows/ci.yml` con pytest sobre un servicio `pgvector/pgvector:pg15`, y lint, build y Vitest del frontend; el CI no descarga el modelo de embeddings porque los tests lo sustituyen.
+
+**Ajustes y criterio humano en esta fase:**
+
+- **Verificación real del despliegue, no solo del build:** se construyeron ambas imágenes, se ejecutaron los 98 tests dentro de la imagen del backend con Python 3.11 y las versiones fijadas, y se levantó el `docker-compose.prod.yml` completo en local: migraciones y seed automáticos, `/health` en 20 s, pregunta real a Gemini con fuentes, pregunta ajena cortada por el umbral, seguimiento que usa el historial y CORS solo para el origen del frontend.
+- **Errores propios corregidos:** el README decía que el modelo de embeddings pesaba ~120 MB y en realidad son ~460 MB (se corrigió en README, Dockerfile y comentarios); se quitó un `mem_limit: 2g` del compose que podía provocar un OOM por sí mismo; el build falló una vez por un error de hash en una descarga lenta y se reintentó.
+- **Decisión de infraestructura:** el Postgres gestionado de Dokploy no incluye `pgvector`, por eso la base de datos se despliega como servicio del compose con la imagen de pgvector.
+- **Alcance del README:** se reescribió la sección de infraestructura para describir lo construido (Dokploy y GitHub Actions) y se retiró el consentimiento en el primer login, que no estaba implementado, en lugar de implementarlo a última hora.
+
+### 13. Mantenimiento
+
+- **README y prompts.md al día con cada cambio:** cada bloque de trabajo del change cerró con la actualización de la documentación correspondiente (variables de entorno, sección de tests, infraestructura, seguridad y estructura de ficheros), y al final se contrastó cada afirmación del README con el código.
+- **Revisión automatizada de los pull requests:** `/code-review` sobre cada uno de los tres PRs de la sección 7 del README, con triage humano de los hallazgos.
+  - PR 1 (tests): 10 hallazgos; se corrigieron el historial que podía empezar con una respuesta del asistente (Gemini lo rechazaría), la subida de documentos que bloqueaba el servidor y el aviso al activar `LLM_FAKE`.
+  - PR 2 (despliegue): se corrigieron el `start-period` del healthcheck y el CI duplicado; se mantuvo el seed por defecto de forma deliberada (credenciales de demostración que exige la entrega).
+  - PR 3 (documentación): la revisión encontró un fallo real fuera de lo que cubrían los tests: una segunda pregunta en una conversación ya abierta no aparecía hasta recargar la página. Se corrigió el hook, se amplió el E2E con un seguimiento y se comprobó que sin el arreglo el test falla. También se hizo reintentable el seed.
+  - Los hallazgos que no se corrigieron (límite de tamaño de subida, carrera en el registro, etc.) se documentaron como limitaciones conocidas en la sección 2.5 del README.
+
+### 14. Flujo de trabajo con IA (resumen)
+
+**Herramientas:** Claude Code en la extensión de VS Code; flujo spec-driven con OpenSpec (`/opsx:propose`, `/opsx:apply`, `/opsx:archive`); chrome-devtools (MCP) para comprobar la interfaz en el navegador durante la Entrega 2 y Playwright para el E2E; Docker para verificar el despliegue.
+
+**Modelos:** Opus para planificar, revisar el alcance y contrastar la guía con el proyecto (modo plan); Sonnet para la implementación y los tests (`/opsx:propose` y `/opsx:apply`); Gemini como LLM del propio producto.
+
+**Contexto que se le dio a la IA:** `CLAUDE.md` con las capas y las reglas del asistente (un router nunca importa un modelo, un repository nunca importa un service, sin secretos en el código, hnsw con coseno); specs, design y tareas de cada change de OpenSpec; los `.md` de las lecciones y la devolución de LIDR como fuentes de requisitos.
+
+**IA por fase del ciclo de desarrollo:**
+
+| Fase | Con IA | Evidencia |
+|---|---|---|
+| Análisis | Sí | Alcance del MVP, caso de uso y nombre del producto (sección 1) |
+| Diseño | Sí | Arquitectura, modelo de datos y API contrastados con repos de referencia (secciones 2 a 4) |
+| Implementación | Sí | `CLAUDE.md` y change `implementar-entrega-2` de OpenSpec (secciones 8 y 9); historial en las respuestas y umbral (sección 11) |
+| Pruebas | Sí | Tests generados desde los Gherkin de las HU y comprobados con mutaciones (sección 11) |
+| Despliegue | Sí | Dockerfiles, compose de producción, CI y guía de Dokploy (sección 12) |
+| Mantenimiento | Sí | Documentación al día en cada cambio y `/code-review` sobre los 3 PRs, con correcciones aplicadas (sección 13) |
+
+**Dónde intervino el criterio humano:** el usuario descartó crear un endpoint de borrado de asignaturas que no estaba en los specs, eligió el modelo de Gemini probando varios, mantuvo fuera del alcance el consentimiento GDPR, rechazó dos veces el plan para iterarlo antes de aprobarlo, eligió Dokploy con dominio propio y Playwright de navegador.

@@ -62,12 +62,17 @@ def run() -> None:
             s for s in subject_service.list_subjects(db) if s.name == SUBJECT_NAME and s.teacher_id == teacher.id
         ]
         if existing:
-            print(f"  ya existía «{SUBJECT_NAME}»")
-            return
-        subject = subject_service.create_subject(
-            db, teacher.id, {"name": SUBJECT_NAME, "description": SUBJECT_DESCRIPTION}
-        )
-        print(f"  creada «{SUBJECT_NAME}»")
+            subject = existing[0]
+            # si un arranque anterior creó la asignatura pero falló al indexar, se reintenta el material
+            if document_service.list_documents(db, subject.id, teacher.id):
+                print(f"  ya existía «{SUBJECT_NAME}»")
+                return
+            print(f"  «{SUBJECT_NAME}» existía sin material: se vuelve a indexar")
+        else:
+            subject = subject_service.create_subject(
+                db, teacher.id, {"name": SUBJECT_NAME, "description": SUBJECT_DESCRIPTION}
+            )
+            print(f"  creada «{SUBJECT_NAME}»")
         print("  indexando material de ejemplo (la primera vez descarga el modelo de embeddings)…")
         _, chunks = document_service.upload_document(
             db, subject.id, teacher.id, SAMPLE_FILENAME, SAMPLE_TEXT.encode("utf-8")

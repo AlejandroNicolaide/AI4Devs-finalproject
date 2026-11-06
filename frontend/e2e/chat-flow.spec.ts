@@ -60,6 +60,12 @@ test('docente sube material, estudiante pregunta y recibe respuesta con fuentes;
   await expect(chip).toHaveAttribute('aria-expanded', 'true')
   await expect(page.getByText(/profase, metafase, anafase y telofase/)).toBeVisible()
 
+  // --- Seguimiento en la misma conversación: debe aparecer sin recargar ---
+  await page.getByPlaceholder('Escribe tu pregunta…').fill('¿Y qué es la fotosíntesis?')
+  await page.getByRole('button', { name: 'Enviar' }).click()
+  await expect(page.getByText('¿Y qué es la fotosíntesis?')).toBeVisible()
+  await expect(page.getByText(FAKE_ANSWER)).toHaveCount(2)
+
   // --- Historial y derecho al olvido ---
   await page.getByRole('link', { name: 'Historial' }).click()
   await expect(page.getByRole('heading', { name: 'Historial de conversaciones' })).toBeVisible()

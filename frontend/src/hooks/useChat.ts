@@ -7,7 +7,11 @@ export function useSendMessage() {
   return useMutation({
     mutationFn: (v: { subjectId: string; message: string; conversationId?: string }) =>
       chatService.sendMessage(v.subjectId, v.message, v.conversationId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['conversations'] }),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['conversations'] })
+      // sin esto, la 2.ª pregunta de una conversación ya abierta no aparece (la clave no cambia, no hay refetch)
+      qc.invalidateQueries({ queryKey: ['messages', res.conversation_id] })
+    },
   })
 }
 

@@ -27,7 +27,7 @@ AsistenteIA es un chatbot basado en RAG (Retrieval-Augmented Generation) que aco
 
 ### **0.4. URL del proyecto:**
 
-Pendiente de despliegue.
+Pendiente de completar con la URL pública del despliegue en Dokploy (ver 2.4): `https://app.<tu-dominio>`. Mientras tanto, el proyecto se puede levantar en local con las instrucciones de 1.4 y las credenciales de prueba incluidas.
 
 > Puede ser pública o privada, en cuyo caso deberás compartir los accesos de manera segura. Puedes enviarlos a [alvaro@lidr.co](mailto:alvaro@lidr.co) usando algún servicio como [onetimesecret](https://onetimesecret.com/).
 
@@ -57,7 +57,8 @@ AsistenteIA permite que cada docente cargue la bibliografía y el material de su
 - **Historial de conversación** por estudiante y asignatura.
 - **Eliminación de historial de conversaciones (GDPR / derecho al olvido):** el estudiante puede borrar sus datos conversacionales almacenados.
 - *(should-have, no incluido en el alcance obligatorio del MVP)* Panel de analítica para docentes con preguntas frecuentes y temas de mayor dificultad.
-- *(nice-to-have, opcional)* Control de alucinaciones: umbral de similitud mínimo en el pipeline RAG; si ningún fragmento recuperado supera ese umbral, el asistente responde que no encontró información relevante en el material, en lugar de generar una respuesta sin respaldo.
+- **Control de alucinaciones (opcional, implementado):** umbral de similitud mínimo configurable (`SIMILARITY_THRESHOLD`, ver 1.4); si ningún fragmento recuperado lo supera, el asistente responde que no encontró información relevante en el material y no llama al modelo. Viene desactivado por defecto.
+- **Contexto de la conversación:** en una conversación existente, el asistente recibe también los últimos mensajes para poder responder preguntas de seguimiento («¿y en cuál de ellas…?»).
 
 ### **1.3. Diseño y experiencia de usuario:**
 
@@ -118,6 +119,8 @@ El seed también crea la asignatura «Biología celular (demo)» con un document
 
 **Prueba rápida:** inicia sesión como estudiante → abre «Biología celular (demo)» → «Preguntar al asistente» → revisa la respuesta y sus fuentes. Para el flujo de docente: inicia sesión como docente → crea una asignatura → sube un PDF o TXT → vuelve a entrar como estudiante y pregunta sobre su contenido.
 
+**Más información:** cómo ejecutar los tests en 2.6 (backend 99, frontend 19, E2E 1; cobertura 92 % en backend) y cómo desplegar con Docker/Dokploy en 2.4.
+
 ---
 
 ## 2. Arquitectura del Sistema
@@ -171,7 +174,7 @@ flowchart TB
 - **Frontend (React 18 + TypeScript):** interfaz para docentes (gestión de asignaturas y material) y estudiantes (chat por asignatura). Se comunica con el backend vía REST usando Axios, con React Query para cacheo y estado de las peticiones.
 - **API Layer (FastAPI):** expone los endpoints REST, documentados automáticamente vía OpenAPI/Swagger. Valida entrada/salida con esquemas Pydantic. No contiene lógica de negocio.
 - **Service Layer:**
-  - `RAGService`: orquesta el pipeline RAG (chunking del material subido, generación de embeddings, recuperación de fragmentos relevantes por similitud, construcción del prompt con contexto, llamada al LLM). Opcionalmente puede incorporar un umbral de similitud mínimo configurable para evitar respuestas sin respaldo documental (control de alucinaciones).
+  - `RAGService`: orquesta el pipeline RAG (chunking del material subido, generación de embeddings, recuperación de fragmentos relevantes por similitud, construcción del prompt con contexto, llamada al LLM). Incluye los últimos 6 mensajes de la conversación en el prompt y aplica, si está configurado, un umbral de similitud mínimo para evitar respuestas sin respaldo documental (control de alucinaciones).
   - `SubjectService`: gestión de asignaturas y material asociado.
   - `ConversationService`: historial de conversaciones por estudiante/asignatura y borrado de historial (GDPR).
 - **Repository Layer:** abstrae el acceso a datos (SQLAlchemy sobre PostgreSQL para entidades relacionales, consultas de similitud vectorial sobre pgvector).
@@ -186,19 +189,31 @@ El proyecto está organizado como un **monorepo** con dos aplicaciones independi
 ```
 backend/
   app/
-    api/v1/endpoints/   # Routers FastAPI (auth, subjects, chat, documents)
-    services/           # Lógica de negocio: rag_service, subject_service, conversation_service
+    api/v1/endpoints/    # Routers FastAPI (auth, subjects, documents, chat, conversations, health)
+    services/            # Lógica de negocio: auth, subject, document, rag, conversation
     repositories/        # Acceso a datos (SQLAlchemy + consultas pgvector)
-    models/              # Entidades SQLAlchemy (Subject, Document, DocumentChunk, Conversation, Message, MessageSource)
+    models/              # Entidades SQLAlchemy (User, Subject, Document, DocumentChunk, Conversation, Message, MessageSource)
     schemas/             # Esquemas Pydantic (request/response)
-    core/                # Configuración, variables de entorno, secretos
+    core/                # Configuración, base de datos, seguridad (JWT), dependencias, embeddings
+    seed.py              # Datos de demostración (usuarios de prueba + asignatura con material)
     main.py              # Punto de entrada de la app FastAPI
+  alembic/               # Migraciones (esquema inicial + índice hnsw)
+  tests/                 # unit/ (servicios con mocks) e integration/ (endpoints con Postgres+pgvector)
+  scripts/init_db.sql    # Creación manual del esquema (alternativa a las migraciones)
+  Dockerfile, docker-entrypoint.sh, requirements*.txt, pytest.ini
 frontend/
   src/
-    pages/                # Vistas (login, listado de asignaturas, chat, panel docente)
-    components/           # Componentes de UI reutilizables
-    hooks/                 # Hooks propios (React Query, estado de chat)
-    services/              # Llamadas a la API (Axios)
+    pages/               # Vistas (login, registro, asignaturas, detalle, chat, historial)
+    components/          # Componentes de UI reutilizables (+ sus tests *.test.tsx)
+    context/, hooks/     # Sesión (AuthContext) y hooks de React Query
+    services/            # Llamadas a la API (Axios)
+    types/               # Tipos TypeScript compartidos
+  e2e/                   # Test E2E de Playwright y arranque del backend de pruebas
+  Dockerfile, nginx.conf, playwright.config.ts
+docker-compose.yml       # Solo Postgres+pgvector para desarrollo local
+docker-compose.prod.yml  # Stack de producción para Dokploy (postgres + backend + frontend)
+.github/workflows/ci.yml # CI: pytest, lint, build y vitest
+openspec/                # Specs, changes y archivo del flujo spec-driven (OpenSpec)
 ```
 
 La estructura del `backend` refleja directamente las capas descritas en 2.1/2.2 (API → Services → Repositories → Models), de modo que cada carpeta corresponde a una responsabilidad concreta del patrón Layered Architecture + Repository Pattern. El `frontend` sigue una organización estándar por tipo de artefacto (páginas, componentes, hooks, servicios), habitual en proyectos React con TypeScript.
@@ -255,16 +270,29 @@ flowchart LR
 
 ### **2.5. Seguridad**
 
-- **Autenticación y roles:** acceso diferenciado por rol (docente/estudiante) mediante JWT; un docente solo gestiona el material de sus propias asignaturas, un estudiante solo accede a su propio historial.
+- **Autenticación y roles:** acceso diferenciado por rol (docente/estudiante) mediante JWT (caducidad de 60 minutos); las contraseñas se guardan con hash bcrypt; un docente solo gestiona el material de sus propias asignaturas y un estudiante solo accede a su propio historial.
+- **CORS restringido:** la API solo acepta peticiones de los orígenes definidos en `CORS_ORIGINS`.
 - **Protección de datos (GDPR):**
   - Minimización de datos: solo se almacena lo estrictamente necesario para el funcionamiento (identificador de usuario, mensajes de la conversación, asignatura asociada), sin datos sensibles adicionales.
-  - Consentimiento explícito: el usuario acepta el tratamiento de sus datos conversacionales en el primer login (aceptación de política de privacidad).
+  - Consentimiento explícito: **no implementado** en esta versión (queda como mejora futura: aceptación de la política de privacidad en el registro).
   - Derecho al olvido: el estudiante puede eliminar su historial de conversaciones desde la propia aplicación (funcionalidad ya listada en 1.2).
-  - Cifrado en tránsito: comunicación exclusivamente vía HTTPS entre frontend, backend y base de datos.
-  - Cifrado en reposo: gestionado por el proveedor de base de datos (Supabase Postgres).
+  - Cifrado en tránsito: el navegador se comunica con el frontend y con la API exclusivamente por HTTPS (Traefik de Dokploy con certificados Let's Encrypt). La base de datos no se expone: solo es alcanzable por el backend a través de la red privada del compose.
+  - Cifrado en reposo: la base de datos corre en un volumen del propio VPS, por lo que depende del cifrado de disco del servidor (no se aplica cifrado a nivel de aplicación).
+  - Terceros: la pregunta del estudiante y los fragmentos recuperados se envían a la API de Gemini para generar la respuesta; los embeddings se calculan en local.
   - Retención: los datos conversacionales se conservan solo mientras la cuenta esté activa o hasta que el usuario solicite su borrado.
 - **Gestión de secretos:** claves de API (Gemini) y credenciales de base de datos como variables de entorno, nunca en el repositorio.
 - **Validación de entrada:** esquemas Pydantic en cada endpoint, previniendo inyección y payloads malformados antes de llegar a la capa de servicio.
+- **Credenciales de demostración:** el seed (`RUN_SEED=1`, valor por defecto) crea los usuarios de prueba documentados en este README para que quien revise pueda entrar en la instancia pública. Son datos de demostración sin relación con ningún secreto real; en un despliegue real se desactiva con `RUN_SEED=0`.
+
+**Limitaciones conocidas** (detectadas en las revisiones `/code-review` de los PRs; no bloquean el flujo del MVP y quedan como mejoras):
+
+- La subida de documentos no limita el tamaño del archivo ni captura los PDF cifrados o corruptos (devolverían 500).
+- Dos registros simultáneos con el mismo email pueden devolver 500 en lugar de 409; la longitud máxima de la contraseña se valida en caracteres y bcrypt cuenta bytes.
+- La recuperación de fragmentos usa solo el texto de la pregunta: un seguimiento muy elíptico («¿y la segunda?») puede no encontrar material aunque el historial sí se envíe al modelo.
+- La transacción de base de datos permanece abierta durante la llamada a Gemini (hasta 60 s); con muchas preguntas lentas simultáneas el pool de conexiones puede agotarse.
+- El orden de mensajes dentro de un mismo turno depende de un desempate por rol y no de una columna secuencial.
+- Con varias réplicas del backend, la migración y el seed del arranque podrían ejecutarse a la vez; el despliegue previsto usa una sola réplica.
+- `SECRET_KEY` no se valida en fuerza mínima y `LLM_FAKE` solo avisa por log si se activa; deben definirse con cuidado en el panel de Dokploy.
 
 ### **2.6. Tests**
 
@@ -272,7 +300,7 @@ La suite cubre los tres niveles pedidos y se traza a los escenarios Gherkin de l
 
 | Nivel | Herramienta | Qué cubre | Tests |
 |---|---|---|---|
-| Unitarios backend | Pytest | Service Layer con repositorios mockeados: `AuthService`, `RAGService` (con/sin material, historial, umbral, fallo del LLM), `DocumentService` (TXT, PDF, formatos no soportados, docente ajeno), `ConversationService` | 37 |
+| Unitarios backend | Pytest | Service Layer con repositorios mockeados: `AuthService`, `RAGService` (con/sin material, historial, umbral, fallo del LLM), `DocumentService` (TXT, PDF, formatos no soportados, docente ajeno), `ConversationService` | 38 |
 | Integración backend | Pytest + FastAPI `TestClient` | Endpoints reales sobre **Postgres+pgvector de test**: auth, asignaturas y carga, chat (`sources` como array, 401/403/404/503), conversaciones y borrado en cascada, índice hnsw, `/health`, CORS | 61 |
 | Componentes frontend | Vitest + React Testing Library | `MessageBubble` (fuentes expandibles), `ChatWindow`, `LoginPage`, `FileUpload` | 19 |
 | E2E | Playwright (Chromium) | Docente sube material → estudiante pregunta → respuesta con **Fuentes** → historial → borrado | 1 |
@@ -403,7 +431,7 @@ erDiagram
 
 ## 4. Especificación de la API
 
-El backend expone una API REST (FastAPI, documentada automáticamente vía OpenAPI/Swagger). A continuación se describen los 3 endpoints principales del flujo core.
+El backend expone una API REST (FastAPI, documentada automáticamente vía OpenAPI/Swagger). A continuación se describen los endpoints del flujo principal (registro y acceso, carga de material, chat RAG y borrado de historial). Además existen `GET /subjects`, `GET /subjects/{id}`, `GET /subjects/{id}/documents`, `GET /conversations`, `GET /conversations/{id}/messages` y `GET /health`; la documentación interactiva completa está en `/docs`.
 
 ### 4.1. Registro y acceso de usuarios
 
@@ -533,6 +561,10 @@ paths:
                     type: integer
         '403':
           description: El usuario no es docente de esta asignatura
+        '415':
+          description: Formato no soportado (solo PDF y TXT)
+        '422':
+          description: No se pudo extraer texto del documento
 ```
 
 **Ejemplo de respuesta:**
@@ -544,7 +576,7 @@ paths:
 }
 ```
 
-### 4.2. Consultar al asistente (chat RAG)
+### 4.3. Consultar al asistente (chat RAG)
 
 ```yaml
 openapi: 3.0.0
@@ -632,7 +664,7 @@ paths:
 }
 ```
 
-### 4.3. Eliminar historial de conversación (GDPR)
+### 4.4. Eliminar historial de conversación (GDPR)
 
 ```yaml
 openapi: 3.0.0
@@ -849,11 +881,24 @@ Escenario: Eliminación de conversación inexistente
 
 > Documenta 3 de las Pull Requests realizadas durante la ejecución del proyecto
 
-Pendiente: el desarrollo de la Entrega 2 se realizó sobre la rama `feature/entrega-2-AN` (historial de commits en el repositorio). Las Pull Requests reales se documentarán aquí a medida que se abran, sin incluir PRs ficticias.
+Las tres Pull Requests de la entrega final se abrieron en este mismo repositorio hacia la rama `final-project-AN`. Cada una pasó el CI de GitHub Actions y una revisión automatizada con `/code-review` de Claude Code; los hallazgos aplicados se commitearon en la propia rama del PR y los que no se corrigieron figuran como limitaciones en la sección 2.5.
 
-**Pull Request 1**
+**Pull Request 1 — [#1 Tests, historial en respuestas, umbral de similitud y CI](https://github.com/AlejandroNicolaide/AI4Devs-finalproject/pull/1)** (`feature/tests`)
 
-**Pull Request 2**
+- Historial de la conversación en el prompt (criterio de aceptación de la HU-2), umbral de similitud opcional, `GET /health` y CORS configurable.
+- Suite de tests: 99 de backend (92 % de cobertura), 19 de frontend y 1 E2E con Playwright.
+- Workflow de GitHub Actions con pytest sobre pgvector, lint, build y Vitest.
+- Revisión `/code-review`: 10 hallazgos. Se corrigieron tres (historial que podía empezar con una respuesta del asistente, subida de documentos que bloqueaba el servidor y aviso al activar `LLM_FAKE`); el resto son limitaciones previas documentadas.
 
-**Pull Request 3**
+**Pull Request 2 — [#2 Despliegue en Dokploy: Dockerfiles, compose de producción y guía](https://github.com/AlejandroNicolaide/AI4Devs-finalproject/pull/2)** (`feature/deploy`)
+
+- `Dockerfile` del backend (torch CPU y modelo precargado) y del frontend (nginx con fallback de SPA), entrypoint con migraciones y seed, y `docker-compose.prod.yml` con `pgvector/pgvector:pg15`.
+- Guía de despliegue en Dokploy (variables, dominios, HTTPS, RAM necesaria).
+- Revisión `/code-review`: se corrigieron el `start-period` del healthcheck y la ejecución duplicada del CI; se mantuvo el seed por defecto de forma deliberada (credenciales de demostración exigidas por la entrega).
+
+**Pull Request 3 — [#3 Documentación final y correcciones de la revisión](https://github.com/AlejandroNicolaide/AI4Devs-finalproject/pull/3)** (`feature/docs-final`)
+
+- README alineado con lo construido (infraestructura real, seguridad, estructura, API, tests, despliegue) y limitaciones conocidas.
+- `prompts.md` ampliado con las secciones de pruebas, despliegue y mantenimiento, el resumen del flujo de IA y la tabla de IA por fase.
+- Revisión `/code-review`: detectó dos fallos reales que se corrigieron en esta misma rama: una segunda pregunta en una conversación ya abierta no aparecía hasta recargar (el hook no invalidaba los mensajes; el E2E ahora cubre el seguimiento y se comprobó que falla sin el arreglo) y el seed no reintentaba el material si un arranque anterior fallaba al indexar.
 
