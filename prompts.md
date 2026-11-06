@@ -393,7 +393,11 @@ Resultado: `backend/scripts/init_db.sql`, idempotente y equivalente a las migrac
 ### 13. Mantenimiento
 
 - **README y prompts.md al día con cada cambio:** cada bloque de trabajo del change cerró con la actualización de la documentación correspondiente (variables de entorno, sección de tests, infraestructura, seguridad y estructura de ficheros), y al final se contrastó cada afirmación del README con el código.
-- **Revisión automatizada de los pull requests:** pendiente de completar cuando se abran los PRs de la sección 7 del README (se usará `/code-review` sobre cada uno).
+- **Revisión automatizada de los pull requests:** `/code-review` sobre cada uno de los tres PRs de la sección 7 del README, con triage humano de los hallazgos.
+  - PR 1 (tests): 10 hallazgos; se corrigieron el historial que podía empezar con una respuesta del asistente (Gemini lo rechazaría), la subida de documentos que bloqueaba el servidor y el aviso al activar `LLM_FAKE`.
+  - PR 2 (despliegue): se corrigieron el `start-period` del healthcheck y el CI duplicado; se mantuvo el seed por defecto de forma deliberada (credenciales de demostración que exige la entrega).
+  - PR 3 (documentación): la revisión encontró un fallo real fuera de lo que cubrían los tests: una segunda pregunta en una conversación ya abierta no aparecía hasta recargar la página. Se corrigió el hook, se amplió el E2E con un seguimiento y se comprobó que sin el arreglo el test falla. También se hizo reintentable el seed.
+  - Los hallazgos que no se corrigieron (límite de tamaño de subida, carrera en el registro, etc.) se documentaron como limitaciones conocidas en la sección 2.5 del README.
 
 ### 14. Flujo de trabajo con IA (resumen)
 
@@ -412,6 +416,6 @@ Resultado: `backend/scripts/init_db.sql`, idempotente y equivalente a las migrac
 | Implementación | Sí | `CLAUDE.md` y change `implementar-entrega-2` de OpenSpec (secciones 8 y 9); historial en las respuestas y umbral (sección 11) |
 | Pruebas | Sí | Tests generados desde los Gherkin de las HU y comprobados con mutaciones (sección 11) |
 | Despliegue | Sí | Dockerfiles, compose de producción, CI y guía de Dokploy (sección 12) |
-| Mantenimiento | Parcial | Documentación al día en cada cambio; revisión de PRs pendiente (sección 13) |
+| Mantenimiento | Sí | Documentación al día en cada cambio y `/code-review` sobre los 3 PRs, con correcciones aplicadas (sección 13) |
 
 **Dónde intervino el criterio humano:** el usuario descartó crear un endpoint de borrado de asignaturas que no estaba en los specs, eligió el modelo de Gemini probando varios, mantuvo fuera del alcance el consentimiento GDPR, rechazó dos veces el plan para iterarlo antes de aprobarlo, eligió Dokploy con dominio propio y Playwright de navegador.

@@ -900,4 +900,5 @@ Las tres Pull Requests de la entrega final se abrieron en este mismo repositorio
 
 - README alineado con lo construido (infraestructura real, seguridad, estructura, API, tests, despliegue) y limitaciones conocidas.
 - `prompts.md` ampliado con las secciones de pruebas, despliegue y mantenimiento, el resumen del flujo de IA y la tabla de IA por fase.
+- Revisión `/code-review`: detectó dos fallos reales que se corrigieron en esta misma rama: una segunda pregunta en una conversación ya abierta no aparecía hasta recargar (el hook no invalidaba los mensajes; el E2E ahora cubre el seguimiento y se comprobó que falla sin el arreglo) y el seed no reintentaba el material si un arranque anterior fallaba al indexar.
 
