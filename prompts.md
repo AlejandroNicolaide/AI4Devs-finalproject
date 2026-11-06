@@ -355,7 +355,7 @@ Resultado: se comprobó en el código que las cuatro correcciones de diseño (in
 /opsx:apply
 ```
 
-Resultado: tareas 3 a 5 del change: infraestructura de tests con Postgres+pgvector real (SQLite no soporta `vector`), con rollback por test y con Gemini y embeddings sustituidos por dobles deterministas; 37 tests unitarios del Service Layer con repositorios mockeados y 61 de integración de endpoints. Cobertura del backend: 92 %.
+Resultado: tareas 3 a 5 del change: infraestructura de tests con Postgres+pgvector real (SQLite no soporta `vector`), con rollback por test y con Gemini y embeddings sustituidos por dobles deterministas; 38 tests unitarios del Service Layer con repositorios mockeados y 61 de integración de endpoints. Cobertura del backend: 92 %.
 
 **Prompt 2 (decisión de diseño del E2E):** la IA propuso un seam `LLM_FAKE=1` (solo pruebas, desactivado por defecto) para que el E2E de Playwright sea determinista sin gastar cuota de Gemini. Resultado: un único test en navegador real recorre docente sube material → estudiante pregunta → respuesta con **Fuentes** → historial → borrado, con backend, base de datos y embeddings reales.
 

@@ -119,7 +119,7 @@ El seed también crea la asignatura «Biología celular (demo)» con un document
 
 **Prueba rápida:** inicia sesión como estudiante → abre «Biología celular (demo)» → «Preguntar al asistente» → revisa la respuesta y sus fuentes. Para el flujo de docente: inicia sesión como docente → crea una asignatura → sube un PDF o TXT → vuelve a entrar como estudiante y pregunta sobre su contenido.
 
-**Más información:** cómo ejecutar los tests en 2.6 (backend 98, frontend 19, E2E 1; cobertura 92 % en backend) y cómo desplegar con Docker/Dokploy en 2.4.
+**Más información:** cómo ejecutar los tests en 2.6 (backend 99, frontend 19, E2E 1; cobertura 92 % en backend) y cómo desplegar con Docker/Dokploy en 2.4.
 
 ---
 
@@ -282,6 +282,17 @@ flowchart LR
   - Retención: los datos conversacionales se conservan solo mientras la cuenta esté activa o hasta que el usuario solicite su borrado.
 - **Gestión de secretos:** claves de API (Gemini) y credenciales de base de datos como variables de entorno, nunca en el repositorio.
 - **Validación de entrada:** esquemas Pydantic en cada endpoint, previniendo inyección y payloads malformados antes de llegar a la capa de servicio.
+- **Credenciales de demostración:** el seed (`RUN_SEED=1`, valor por defecto) crea los usuarios de prueba documentados en este README para que quien revise pueda entrar en la instancia pública. Son datos de demostración sin relación con ningún secreto real; en un despliegue real se desactiva con `RUN_SEED=0`.
+
+**Limitaciones conocidas** (detectadas en las revisiones `/code-review` de los PRs; no bloquean el flujo del MVP y quedan como mejoras):
+
+- La subida de documentos no limita el tamaño del archivo ni captura los PDF cifrados o corruptos (devolverían 500).
+- Dos registros simultáneos con el mismo email pueden devolver 500 en lugar de 409; la longitud máxima de la contraseña se valida en caracteres y bcrypt cuenta bytes.
+- La recuperación de fragmentos usa solo el texto de la pregunta: un seguimiento muy elíptico («¿y la segunda?») puede no encontrar material aunque el historial sí se envíe al modelo.
+- La transacción de base de datos permanece abierta durante la llamada a Gemini (hasta 60 s); con muchas preguntas lentas simultáneas el pool de conexiones puede agotarse.
+- El orden de mensajes dentro de un mismo turno depende de un desempate por rol y no de una columna secuencial.
+- Con varias réplicas del backend, la migración y el seed del arranque podrían ejecutarse a la vez; el despliegue previsto usa una sola réplica.
+- `SECRET_KEY` no se valida en fuerza mínima y `LLM_FAKE` solo avisa por log si se activa; deben definirse con cuidado en el panel de Dokploy.
 
 ### **2.6. Tests**
 
@@ -289,7 +300,7 @@ La suite cubre los tres niveles pedidos y se traza a los escenarios Gherkin de l
 
 | Nivel | Herramienta | Qué cubre | Tests |
 |---|---|---|---|
-| Unitarios backend | Pytest | Service Layer con repositorios mockeados: `AuthService`, `RAGService` (con/sin material, historial, umbral, fallo del LLM), `DocumentService` (TXT, PDF, formatos no soportados, docente ajeno), `ConversationService` | 37 |
+| Unitarios backend | Pytest | Service Layer con repositorios mockeados: `AuthService`, `RAGService` (con/sin material, historial, umbral, fallo del LLM), `DocumentService` (TXT, PDF, formatos no soportados, docente ajeno), `ConversationService` | 38 |
 | Integración backend | Pytest + FastAPI `TestClient` | Endpoints reales sobre **Postgres+pgvector de test**: auth, asignaturas y carga, chat (`sources` como array, 401/403/404/503), conversaciones y borrado en cascada, índice hnsw, `/health`, CORS | 61 |
 | Componentes frontend | Vitest + React Testing Library | `MessageBubble` (fuentes expandibles), `ChatWindow`, `LoginPage`, `FileUpload` | 19 |
 | E2E | Playwright (Chromium) | Docente sube material → estudiante pregunta → respuesta con **Fuentes** → historial → borrado | 1 |
@@ -870,11 +881,23 @@ Escenario: Eliminación de conversación inexistente
 
 > Documenta 3 de las Pull Requests realizadas durante la ejecución del proyecto
 
-Pendiente: el desarrollo de la Entrega 2 se realizó sobre la rama `feature/entrega-2-AN` (historial de commits en el repositorio). Las Pull Requests reales se documentarán aquí a medida que se abran, sin incluir PRs ficticias.
+Las tres Pull Requests de la entrega final se abrieron en este mismo repositorio hacia la rama `final-project-AN`. Cada una pasó el CI de GitHub Actions y una revisión automatizada con `/code-review` de Claude Code; los hallazgos aplicados se commitearon en la propia rama del PR y los que no se corrigieron figuran como limitaciones en la sección 2.5.
 
-**Pull Request 1**
+**Pull Request 1 — [#1 Tests, historial en respuestas, umbral de similitud y CI](https://github.com/AlejandroNicolaide/AI4Devs-finalproject/pull/1)** (`feature/tests`)
 
-**Pull Request 2**
+- Historial de la conversación en el prompt (criterio de aceptación de la HU-2), umbral de similitud opcional, `GET /health` y CORS configurable.
+- Suite de tests: 99 de backend (92 % de cobertura), 19 de frontend y 1 E2E con Playwright.
+- Workflow de GitHub Actions con pytest sobre pgvector, lint, build y Vitest.
+- Revisión `/code-review`: 10 hallazgos. Se corrigieron tres (historial que podía empezar con una respuesta del asistente, subida de documentos que bloqueaba el servidor y aviso al activar `LLM_FAKE`); el resto son limitaciones previas documentadas.
 
-**Pull Request 3**
+**Pull Request 2 — [#2 Despliegue en Dokploy: Dockerfiles, compose de producción y guía](https://github.com/AlejandroNicolaide/AI4Devs-finalproject/pull/2)** (`feature/deploy`)
+
+- `Dockerfile` del backend (torch CPU y modelo precargado) y del frontend (nginx con fallback de SPA), entrypoint con migraciones y seed, y `docker-compose.prod.yml` con `pgvector/pgvector:pg15`.
+- Guía de despliegue en Dokploy (variables, dominios, HTTPS, RAM necesaria).
+- Revisión `/code-review`: se corrigieron el `start-period` del healthcheck y la ejecución duplicada del CI; se mantuvo el seed por defecto de forma deliberada (credenciales de demostración exigidas por la entrega).
+
+**Pull Request 3 — [#3 Documentación final: README y prompts.md](https://github.com/AlejandroNicolaide/AI4Devs-finalproject/pull/3)** (`feature/docs-final`)
+
+- README alineado con lo construido (infraestructura real, seguridad, estructura, API, tests, despliegue) y limitaciones conocidas.
+- `prompts.md` ampliado con las secciones de pruebas, despliegue y mantenimiento, el resumen del flujo de IA y la tabla de IA por fase.
 
